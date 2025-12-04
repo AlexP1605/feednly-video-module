@@ -564,13 +564,7 @@
       elements.uploadBtn.addEventListener("click", uploadVideo);
 
       function sendToHost(text) {
-        if (window.ReactNativeWebView?.postMessage) {
-          window.ReactNativeWebView.postMessage(text);
-        } else if (window.parent && window.parent !== window) {
-          window.parent.postMessage(text, "*");
-        } else {
-          console.log("Message to host:", text);
-        }
+        window.postMessage(text, "*");
       }
 
       function notifyParent(status, errorMessage) {
@@ -610,11 +604,15 @@
         console.log("feednlyStart called with:", payload);
         setStatus("From Bubble: " + mode);
         sendToHost("FEEDNLY_START " + JSON.stringify(payload));
+        state.uploadURL = uploadURL || state.uploadURL;
         handleIncomingMessage({ data: JSON.stringify(payload) });
       };
       setModeLabel("Idle");
       setStatus("Waiting for Bubble host message");
-      sendToHost("TEST_WEBVIEW_READY");
+
+      window.addEventListener("load", () => {
+        setTimeout(() => sendToHost("TEST_WEBVIEW_READY"), 50);
+      });
     </script>
   </body>
 </html>
