@@ -606,10 +606,15 @@
       window.addEventListener("message", handleIncomingMessage);
       window.feednlyStart = function (mode, uploadURL) {
         const payload = { mode, uploadURL };
+        // Debug logs
+        console.log("feednlyStart called with:", payload);
+        setStatus("From Bubble: " + mode);
+        sendToHost("FEEDNLY_START " + JSON.stringify(payload));
         handleIncomingMessage({ data: JSON.stringify(payload) });
       };
       setModeLabel("Idle");
       setStatus("Waiting for Bubble host message");
+      sendToHost("TEST_WEBVIEW_READY");
     </script>
   </body>
 </html>
