@@ -563,13 +563,24 @@
 
       elements.uploadBtn.addEventListener("click", uploadVideo);
 
+      function sendToHost(text) {
+        if (window.ReactNativeWebView?.postMessage) {
+          window.ReactNativeWebView.postMessage(text);
+        } else if (window.parent && window.parent !== window) {
+          window.parent.postMessage(text, "*");
+        } else {
+          console.log("Message to host:", text);
+        }
+      }
+
       function notifyParent(status, errorMessage) {
         const payload = {
           status,
           asset_id: state.assetId || extractAssetId(state.uploadURL) || "unknown",
         };
         if (errorMessage) payload.error = errorMessage;
-        window.parent?.postMessage(JSON.stringify(payload), "*");
+        const text = JSON.stringify(payload);
+        sendToHost(text);
       }
 
       function handleIncomingMessage(event) {
@@ -593,6 +604,10 @@
       }
 
       window.addEventListener("message", handleIncomingMessage);
+      window.feednlyStart = function (mode, uploadURL) {
+        const payload = { mode, uploadURL };
+        handleIncomingMessage({ data: JSON.stringify(payload) });
+      };
       setModeLabel("Idle");
       setStatus("Waiting for Bubble host message");
     </script>
