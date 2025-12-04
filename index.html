@@ -1,6 +1,600 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Feednly Video Module</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f9fc;
+        --card: #ffffff;
+        --text: #1d1f23;
+        --muted: #6a707c;
+        --accent: #ff4d4f;
+        --accent-2: #4f46e5;
+        --border: #e5e7eb;
+        --shadow: 0 15px 40px rgba(17, 24, 39, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .app {
+        width: 100%;
+        max-width: 520px;
+        background: var(--card);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+        padding: 20px 20px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .pill {
+        background: #eef2ff;
+        color: #4338ca;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      .preview {
+        position: relative;
+        background: linear-gradient(145deg, #f4f6fb, #e9ecf4);
+        border-radius: 14px;
+        border: 1px dashed var(--border);
+        overflow: hidden;
+        height: 260px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: none;
+      }
+
+      .placeholder {
+        text-align: center;
+        color: var(--muted);
+        font-size: 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .placeholder .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--accent-2);
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        transition: transform 180ms ease, box-shadow 180ms ease, opacity 150ms;
+      }
+
+      .record-btn {
+        width: 86px;
+        height: 86px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #ff8f8f, var(--accent));
+        color: #fff;
+        font-size: 14px;
+        position: relative;
+        box-shadow: 0 12px 30px rgba(255, 77, 79, 0.35);
+      }
+
+      .record-btn::after {
+        content: "";
+        position: absolute;
+        inset: -12px;
+        border-radius: 50%;
+        background: rgba(255, 77, 79, 0.12);
+        opacity: 0;
+        transition: opacity 200ms ease;
+        z-index: -1;
+      }
+
+      .record-btn.recording {
+        animation: pulse 1.2s ease-in-out infinite;
+        box-shadow: 0 14px 36px rgba(255, 77, 79, 0.45);
+      }
+
+      .record-btn.recording::after {
+        opacity: 1;
+      }
+
+      .gallery-btn {
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: #eef2ff;
+        color: #4338ca;
+        box-shadow: inset 0 0 0 1px rgba(67, 56, 202, 0.1);
+      }
+
+      button:active {
+        transform: translateY(2px) scale(0.99);
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .loader {
+        width: 18px;
+        height: 18px;
+        border: 2px solid #e5e7eb;
+        border-top-color: var(--accent-2);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        display: none;
+      }
+
+      .progress {
+        height: 12px;
+        background: #f3f4f6;
+        border-radius: 999px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+
+      .progress-fill {
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, var(--accent-2), #8b5cf6);
+        transition: width 150ms ease;
+      }
+
+      .upload-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .mini-btn {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #111827;
+        color: #fff;
+      }
+
+      .chip {
+        padding: 6px 10px;
+        background: #f3f4f6;
+        border-radius: 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(0.98);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.02);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(0.98);
+          opacity: 0.8;
+        }
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 600px) {
+        body {
+          padding: 12px;
+        }
+
+        .app {
+          padding: 16px;
+        }
+
+        .record-btn {
+          width: 78px;
+          height: 78px;
+        }
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js" defer></script>
+  </head>
   <body>
-    <h1>Feednly Video Module - Setup OK</h1>
+    <main class="app">
+      <header>
+        <h1 class="title">
+          <span>Feednly Capture</span>
+          <span class="pill" id="modeLabel">Idle</span>
+        </h1>
+        <span class="chip">Bubble Mobile Ready</span>
+      </header>
+
+      <section class="preview">
+        <video id="preview" playsinline></video>
+        <div class="placeholder" id="placeholder">
+          <div class="dot"></div>
+          <span>Record or select a video to preview</span>
+        </div>
+      </section>
+
+      <div class="controls">
+        <button class="record-btn" id="recordBtn">Record</button>
+        <button class="gallery-btn" id="galleryBtn">Gallery</button>
+      </div>
+
+      <div class="upload-actions">
+        <div class="status-row">
+          <div class="loader" id="loader"></div>
+          <span id="status">Waiting for action</span>
+        </div>
+        <button class="mini-btn" id="uploadBtn">Upload</button>
+      </div>
+
+      <div class="progress" aria-hidden="true">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+
+      <input
+        type="file"
+        id="fileInput"
+        accept="video/*"
+        aria-hidden="true"
+        style="display: none"
+      />
+    </main>
+
+    <script>
+      const elements = {
+        recordBtn: document.getElementById("recordBtn"),
+        galleryBtn: document.getElementById("galleryBtn"),
+        uploadBtn: document.getElementById("uploadBtn"),
+        preview: document.getElementById("preview"),
+        placeholder: document.getElementById("placeholder"),
+        fileInput: document.getElementById("fileInput"),
+        progressFill: document.getElementById("progressFill"),
+        status: document.getElementById("status"),
+        loader: document.getElementById("loader"),
+        modeLabel: document.getElementById("modeLabel"),
+      };
+
+      const state = {
+        mode: "idle",
+        uploadURL: "",
+        assetId: "",
+        recording: false,
+        mediaRecorder: null,
+        stream: null,
+        chunks: [],
+        currentBlob: null,
+        compressionEnabled: true,
+      };
+
+      const THRESHOLD = 50 * 1024 * 1024;
+
+      function setStatus(message) {
+        elements.status.textContent = message;
+      }
+
+      function setModeLabel(mode) {
+        elements.modeLabel.textContent = mode;
+      }
+
+      function toggleLoader(active) {
+        elements.loader.style.display = active ? "block" : "none";
+      }
+
+      function showVideoPreview(blob) {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        elements.preview.srcObject = null;
+        elements.preview.src = url;
+        elements.preview.style.display = "block";
+        elements.placeholder.style.display = "none";
+        elements.preview.controls = true;
+        elements.preview.muted = false;
+        elements.preview.play().catch(() => {});
+      }
+
+      function resetProgress() {
+        elements.progressFill.style.width = "0%";
+      }
+
+      function updateProgress(value) {
+        elements.progressFill.style.width = `${Math.min(100, Math.max(0, value))}%`;
+      }
+
+      function extractAssetId(uploadURL) {
+        try {
+          const url = new URL(uploadURL);
+          const byParam = url.searchParams.get("asset_id") || url.searchParams.get("upload_id");
+          if (byParam) return byParam;
+          const parts = url.pathname.split("/").filter(Boolean);
+          return parts[parts.length - 1] || "";
+        } catch (e) {
+          return "";
+        }
+      }
+
+      async function ensureCamera() {
+        if (state.stream) return state.stream;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          state.stream = stream;
+          elements.preview.srcObject = stream;
+          elements.preview.muted = true;
+          elements.preview.controls = false;
+          elements.preview.style.display = "block";
+          elements.placeholder.style.display = "none";
+          await elements.preview.play();
+          return stream;
+        } catch (error) {
+          setStatus("Camera/mic permission denied");
+          console.error(error);
+          return null;
+        }
+      }
+
+      function stopStream() {
+        if (state.stream) {
+          state.stream.getTracks().forEach((t) => t.stop());
+          state.stream = null;
+        }
+        elements.preview.srcObject = null;
+      }
+
+      async function startRecording() {
+        const stream = await ensureCamera();
+        if (!stream) return;
+        state.chunks = [];
+        state.mediaRecorder = new MediaRecorder(stream);
+        state.mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) state.chunks.push(event.data);
+        };
+        state.mediaRecorder.onstop = handleRecordingStop;
+        state.mediaRecorder.start();
+        state.recording = true;
+        elements.recordBtn.classList.add("recording");
+        elements.recordBtn.textContent = "Stop";
+        setStatus("Recording... tap to stop");
+      }
+
+      function handleRecordingStop() {
+        state.recording = false;
+        elements.recordBtn.classList.remove("recording");
+        elements.recordBtn.textContent = "Record";
+        stopStream();
+        const blob = new Blob(state.chunks, { type: "video/webm" });
+        state.currentBlob = blob;
+        showVideoPreview(blob);
+        setStatus("Recorded. Ready to upload");
+      }
+
+      function stopRecording() {
+        if (state.mediaRecorder && state.recording) {
+          state.mediaRecorder.stop();
+        }
+      }
+
+      function autoSelectGallery() {
+        elements.fileInput.value = "";
+        elements.fileInput.click();
+      }
+
+      elements.recordBtn.addEventListener("click", () => {
+        if (state.recording) {
+          stopRecording();
+        } else {
+          state.mode = "camera";
+          setModeLabel("Camera");
+          startRecording();
+        }
+      });
+
+      elements.galleryBtn.addEventListener("click", () => {
+        state.mode = "gallery";
+        setModeLabel("Gallery");
+        autoSelectGallery();
+      });
+
+      elements.fileInput.addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        state.currentBlob = file;
+        setStatus("Video selected from gallery");
+        showVideoPreview(file);
+      });
+
+      async function compressIfNeeded(blob) {
+        if (!blob || blob.size <= THRESHOLD || !state.compressionEnabled) {
+          return { blob, usedCompression: false };
+        }
+        if (!window.FFmpeg || !window.createFFmpeg || !window.fetchFile) {
+          setStatus("Compression unavailable. Uploading original.");
+          return { blob, usedCompression: false };
+        }
+        setStatus("Compressing to 720p...");
+        toggleLoader(true);
+        try {
+          const ffmpeg = window.createFFmpeg({
+            log: false,
+            corePath:
+              "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/ffmpeg-core.js",
+          });
+          if (!ffmpeg.isLoaded()) {
+            await ffmpeg.load();
+          }
+          const inputName = "input.mp4";
+          const outputName = "output.mp4";
+          ffmpeg.FS("writeFile", inputName, await window.fetchFile(blob));
+          await ffmpeg.run(
+            "-i",
+            inputName,
+            "-vf",
+            "scale=-2:720",
+            "-preset",
+            "veryfast",
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            outputName
+          );
+          const data = ffmpeg.FS("readFile", outputName);
+          const compressedBlob = new Blob([data.buffer], { type: "video/mp4" });
+          ffmpeg.FS("unlink", inputName);
+          ffmpeg.FS("unlink", outputName);
+          setStatus("Compression complete");
+          return { blob: compressedBlob, usedCompression: true };
+        } catch (error) {
+          console.error("Compression failed", error);
+          setStatus("Compression failed. Uploading original.");
+          return { blob, usedCompression: false };
+        } finally {
+          toggleLoader(false);
+        }
+      }
+
+      async function uploadVideo() {
+        if (!state.uploadURL) {
+          setStatus("Upload URL missing");
+          return;
+        }
+        if (!state.currentBlob) {
+          setStatus("No video to upload");
+          return;
+        }
+        resetProgress();
+        toggleLoader(true);
+        setStatus("Preparing upload...");
+        const { blob } = await compressIfNeeded(state.currentBlob);
+        try {
+          setStatus("Uploading to Feednly...");
+          let progress = 5;
+          updateProgress(progress);
+          const progressTimer = setInterval(() => {
+            progress = Math.min(progress + Math.random() * 10, 92);
+            updateProgress(progress);
+          }, 450);
+          const response = await fetch(state.uploadURL, {
+            method: "PUT",
+            headers: { "Content-Type": blob.type || "video/mp4" },
+            body: blob,
+          });
+          clearInterval(progressTimer);
+          updateProgress(100);
+          if (!response.ok) {
+            throw new Error(`Upload failed: ${response.status}`);
+          }
+          setStatus("Upload complete");
+          notifyParent("ok");
+        } catch (error) {
+          console.error(error);
+          setStatus("Upload error");
+          notifyParent("error", error?.message || "upload failed");
+        } finally {
+          toggleLoader(false);
+        }
+      }
+
+      elements.uploadBtn.addEventListener("click", uploadVideo);
+
+      function notifyParent(status, errorMessage) {
+        const payload = {
+          status,
+          asset_id: state.assetId || extractAssetId(state.uploadURL) || "unknown",
+        };
+        if (errorMessage) payload.error = errorMessage;
+        window.parent?.postMessage(JSON.stringify(payload), "*");
+      }
+
+      function handleIncomingMessage(event) {
+        try {
+          const payload =
+            typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          if (!payload || !payload.mode) return;
+          state.mode = payload.mode;
+          state.uploadURL = payload.uploadURL || state.uploadURL;
+          state.assetId = payload.assetId || extractAssetId(state.uploadURL);
+          setModeLabel(payload.mode === "camera" ? "Camera" : "Gallery");
+          if (payload.mode === "camera") {
+            startRecording();
+          }
+          if (payload.mode === "gallery") {
+            autoSelectGallery();
+          }
+        } catch (error) {
+          console.error("Message parse error", error);
+        }
+      }
+
+      window.addEventListener("message", handleIncomingMessage);
+      setModeLabel("Idle");
+      setStatus("Waiting for Bubble host message");
+    </script>
   </body>
 </html>
