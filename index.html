@@ -306,6 +306,11 @@
     </main>
 
     <script>
+      function getUploadUrlFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get("upload_url") || "";
+      }
+
       const elements = {
         recordBtn: document.getElementById("recordBtn"),
         galleryBtn: document.getElementById("galleryBtn"),
@@ -551,11 +556,9 @@
             throw new Error(`Upload failed: ${response.status}`);
           }
           setStatus("Upload complete");
-          notifyParent("ok");
         } catch (error) {
           console.error(error);
           setStatus("Upload error");
-          notifyParent("error", error?.message || "upload failed");
         } finally {
           toggleLoader(false);
         }
@@ -563,56 +566,18 @@
 
       elements.uploadBtn.addEventListener("click", uploadVideo);
 
-      function sendToHost(text) {
-        window.postMessage(text, "*");
-      }
-
-      function notifyParent(status, errorMessage) {
-        const payload = {
-          status,
-          asset_id: state.assetId || extractAssetId(state.uploadURL) || "unknown",
-        };
-        if (errorMessage) payload.error = errorMessage;
-        const text = JSON.stringify(payload);
-        sendToHost(text);
-      }
-
-      function handleIncomingMessage(event) {
-        try {
-          const payload =
-            typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-          if (!payload || !payload.mode) return;
-          state.mode = payload.mode;
-          state.uploadURL = payload.uploadURL || state.uploadURL;
-          state.assetId = payload.assetId || extractAssetId(state.uploadURL);
-          setModeLabel(payload.mode === "camera" ? "Camera" : "Gallery");
-          if (payload.mode === "camera") {
-            startRecording();
-          }
-          if (payload.mode === "gallery") {
-            autoSelectGallery();
-          }
-        } catch (error) {
-          console.error("Message parse error", error);
+      function initializeUploadUrl() {
+        const uploadUrlFromQuery = getUploadUrlFromQuery();
+        state.uploadURL = uploadUrlFromQuery;
+        if (uploadUrlFromQuery) {
+          setStatus("Upload URL loaded");
+        } else {
+          setStatus("Missing upload URL");
         }
       }
 
-      window.addEventListener("message", handleIncomingMessage);
-      window.feednlyStart = function (mode, uploadURL) {
-        const payload = { mode, uploadURL };
-        // Debug logs
-        console.log("feednlyStart called with:", payload);
-        setStatus("From Bubble: " + mode);
-        sendToHost("FEEDNLY_START " + JSON.stringify(payload));
-        state.uploadURL = uploadURL || state.uploadURL;
-        handleIncomingMessage({ data: JSON.stringify(payload) });
-      };
       setModeLabel("Idle");
-      setStatus("Waiting for Bubble host message");
-
-      window.addEventListener("load", () => {
-        setTimeout(() => sendToHost("TEST_WEBVIEW_READY"), 50);
-      });
+      initializeUploadUrl();
     </script>
   </body>
 </html>
