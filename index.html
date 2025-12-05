@@ -362,7 +362,7 @@
   </div>
 
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
-  <input type="file" id="gallery-input" accept="video/*" />
+  <input type="file" id="galleryInput" accept="video/*" style="display: none" />
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
@@ -372,7 +372,7 @@
     const galleryButton = document.getElementById('gallery-btn');
     const hint = document.getElementById('hint');
     const cameraInput = document.getElementById('camera-input');
-    const galleryInput = document.getElementById('gallery-input');
+    const galleryPicker = document.getElementById('galleryInput');
     const previewOverlay = document.getElementById('preview-overlay');
     const previewVideo = document.getElementById('preview-video');
     const nextButton = document.getElementById('next-button');
@@ -664,12 +664,12 @@
       if (url) uploadURL = url;
     }
 
-    function handleGallerySelect(event) {
-      const file = event.target.files && event.target.files[0];
+    function handleGallerySelect(selection) {
+      const file = selection?.target?.files?.[0] || selection;
       if (!file) return;
       recordedBlob = file;
       showPreview(file);
-      galleryInput.value = '';
+      galleryPicker.value = '';
     }
 
     function feednlyStop() {
@@ -694,15 +694,7 @@
 
       flashButton.addEventListener('click', toggleFlash);
       switchButton.addEventListener('click', switchCamera);
-      galleryButton.addEventListener('click', () => {
-        galleryInput.value = '';
-        if (galleryInput.showPicker) {
-          galleryInput.showPicker();
-        } else {
-          galleryInput.click();
-        }
-      });
-      galleryInput.addEventListener('change', handleGallerySelect);
+      galleryButton.addEventListener('click', feednlyOpenGallery);
       nextButton.addEventListener('click', uploadToMux);
       resumeButton.addEventListener('click', resumeRecording);
       playPauseButton.addEventListener('click', () => {
@@ -716,6 +708,33 @@
       previewVideo.addEventListener('pause', updatePlayPauseIcon);
     }
 
+    function feednlyOpenGallery() {
+      if (!galleryPicker) return;
+      galleryPicker.removeAttribute('capture');
+      galleryPicker.capture = null;
+      galleryPicker.value = '';
+
+      if (galleryPicker.showPicker) {
+        galleryPicker.showPicker().catch(() => galleryPicker.click());
+      } else {
+        galleryPicker.click();
+      }
+    }
+
+    galleryPicker?.addEventListener('change', (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      handleGallerySelect(event);
+      if (window.ReactNativeWebView?.postMessage) {
+        window.ReactNativeWebView.postMessage(
+          JSON.stringify({
+            status: 'selected',
+            fileName: file.name,
+          })
+        );
+      }
+    });
+
     document.addEventListener('DOMContentLoaded', async () => {
       initUploadURLFromQuery();
       setupListeners();
@@ -723,6 +742,7 @@
     });
 
     window.feednlyStop = feednlyStop;
+    window.feednlyOpenGallery = feednlyOpenGallery;
     window.cameraModule = {
       startCamera,
       switchCamera,
