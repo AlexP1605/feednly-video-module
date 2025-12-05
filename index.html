@@ -43,8 +43,7 @@
       background: #000;
     }
 
-    #camera-preview,
-    #recorded-preview {
+    #camera-preview {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -53,16 +52,11 @@
       background: #000;
     }
 
-    #recorded-preview {
-      display: none;
-    }
-
     .controls {
       position: absolute;
       inset: 0;
       pointer-events: none;
-      /* Ajout d'une transition pour que la disparition soit fluide si l'opacité est utilisée */
-      transition: opacity 0.2s ease;
+      transition: opacity 0.3s ease;
     }
 
     .top-bar,
@@ -78,11 +72,13 @@
 
     .top-bar {
       top: 0;
+      z-index: 10;
     }
 
     .bottom-bar {
       bottom: 0;
-      padding-bottom: 22px;
+      padding-bottom: 30px;
+      z-index: 10;
     }
 
     .side {
@@ -90,11 +86,25 @@
       align-items: center;
       gap: 12px;
       pointer-events: auto;
+      transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
+    /* --- CSS POUR CACHER LES BOUTONS PENDANT L'ENREGISTREMENT --- */
+    body.recording .side {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.9);
+    }
+    
+    body.recording #flash-btn {
+      opacity: 0;
+      pointer-events: none;
+    }
+    /* ----------------------------------------------------------- */
+
     .btn {
-      width: 42px;
-      height: 42px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       background: var(--control-bg);
       border: 1px solid var(--control-border);
@@ -102,9 +112,9 @@
       align-items: center;
       justify-content: center;
       color: var(--text);
-      font-size: 16px;
+      font-size: 18px;
       font-weight: 600;
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
       pointer-events: auto;
       backdrop-filter: blur(8px);
       cursor: pointer;
@@ -123,13 +133,13 @@
     .btn.flash-on {
       background: rgba(45, 140, 255, 0.22);
       border-color: rgba(45, 140, 255, 0.7);
-      box-shadow: 0 14px 28px rgba(45, 140, 255, 0.45);
+      color: #2d8cff;
     }
 
     .record-wrap {
       position: relative;
-      width: 82px;
-      height: 82px;
+      width: 84px;
+      height: 84px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -139,8 +149,8 @@
     .record-progress {
       position: absolute;
       inset: -8px;
-      width: 98px;
-      height: 98px;
+      width: 100px;
+      height: 100px;
       transform: rotate(-90deg);
       pointer-events: none;
     }
@@ -165,188 +175,164 @@
       height: 72px;
       border-radius: 50%;
       background: #fff;
-      border: 4px solid rgba(255, 255, 255, 0.35);
+      border: 4px solid rgba(255, 255, 255, 0.3);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
-      transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
     .record-button.recording {
       background: #ff3b30;
-      border-color: rgba(255, 255, 255, 0.55);
-      animation: pulse 1.2s infinite;
+      transform: scale(1.1);
     }
 
     .record-inner {
-      width: 56px;
-      height: 56px;
+      width: 100%;
+      height: 100%;
       border-radius: 50%;
       background: transparent;
-      transition: background 0.2s ease, border-radius 0.2s ease, width 0.2s ease, height 0.2s ease;
+      transition: all 0.3s ease;
     }
 
     .record-button.recording .record-inner {
-      background: #ffdad8;
-      width: 42px;
-      height: 42px;
-      border-radius: 16px;
+      width: 30%;
+      height: 30%;
+      border-radius: 4px;
+      background: #fff;
     }
 
-    @keyframes pulse {
-      0% {
-        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
-      }
-      70% {
-        box-shadow: 0 0 0 12px rgba(255, 59, 48, 0);
-      }
-      100% {
-        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
-      }
-    }
-
+    /* --- PREVIEW OVERLAY (FULL SCREEN) --- */
     #preview-overlay {
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding: 18px 18px 28px;
-      z-index: 40;
+      z-index: 50;
+      background: #000;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.25s ease;
-      background: linear-gradient(180deg, rgba(0, 0, 0, 0) 20%, rgba(0, 0, 0, 0.55) 100%);
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+      display: flex;
+      flex-direction: column;
     }
 
     #preview-overlay.active {
       opacity: 1;
       pointer-events: auto;
+      visibility: visible;
     }
 
-    #preview-card {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      align-items: center;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      padding: 0;
-      box-shadow: none;
-      pointer-events: auto;
-    }
-
-    /* Styles activés quand la preview est montrée */
-    body.showing-preview #recorded-preview {
+    /* La vidéo prend tout l'écran en arrière plan */
+    #preview-video {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;
-      border-radius: 0;
-      box-shadow: none;
+      object-fit: cover; /* Remplit l'écran comme TikTok */
+      z-index: 1;
+      background: #000;
     }
 
-    body.showing-preview #camera-container {
+    /* Conteneur des boutons Play/Pause invisible au centre (optionnel) */
+    #play-pause-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
       align-items: center;
       justify-content: center;
+      /* On peut cliquer à travers pour play/pause via JS global ou mettre un bouton géant invisible */
     }
 
-    /* C'est ici que la magie opère pour cacher les contrôles */
-    body.showing-preview .controls,
-    body.showing-preview #camera-preview {
-      opacity: 0;
-      pointer-events: none;
-      visibility: hidden;
-    }
-
-    body.recording #switch-btn,
-    body.recording #flash-btn {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(4px) scale(0.9);
-      transition: opacity 0.2s ease, transform 0.2s ease;
-    }
-
-    #preview-video {
-      width: 100%;
-      height: auto;
-      max-height: 65vh;
-      object-fit: contain;
-      border-radius: 14px;
-      background: #000;
-      overflow: hidden;
-    }
-
+    /* --- BARRE D'ACTIONS DU BAS --- */
     #preview-actions {
-      display: flex;
-      gap: 14px;
+      position: absolute;
+      bottom: 40px;
+      left: 0;
       width: 100%;
+      z-index: 10;
+      display: flex;
+      align-items: center;
       justify-content: center;
-      padding: 0 12px;
+      gap: 16px;
+      padding: 0 24px;
     }
 
     #preview-actions button {
-      padding: 14px 28px;
-      border-radius: 14px;
+      flex: 1; /* Les deux boutons prennent la même largeur */
+      max-width: 160px; /* Limite la largeur max pour l'esthétique */
+      height: 50px;
+      border-radius: 25px;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 600;
       border: none;
       cursor: pointer;
-      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
-      transition: transform 0.2s ease;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      transition: transform 0.2s ease, opacity 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     #preview-actions button:active {
-      transform: translateY(1px);
+      transform: scale(0.96);
     }
 
-    #resume-button {
-      background: #f6f6f6;
-      color: #111;
-      border: 1px solid rgba(0, 0, 0, 0.08);
+    /* Bouton Recommencer (Style secondaire) */
+    #restart-button {
+      background: rgba(255, 255, 255, 0.9);
+      color: #000;
+      backdrop-filter: blur(10px);
     }
 
+    /* Bouton Suivant (Style primaire) */
     #next-button {
-      background: linear-gradient(180deg, #121212, #050505);
+      background: #ff3b30; /* Couleur style TikTok/Recording */
       color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.5);
     }
 
+    /* Bouton Play/Pause flottant (petit) */
     #play-pause-button {
-      padding: 12px 18px;
-      background: transparent;
-      box-shadow: none;
-      color: #fff;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      font-weight: 600;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 70px;
+        height: 70px;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.4);
+        backdrop-filter: blur(4px);
+        color: white;
+        border: 2px solid rgba(255,255,255,0.2);
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        opacity: 0; /* Caché par défaut quand ça joue */
+        transition: opacity 0.2s ease;
+        pointer-events: none; /* Laisse passer le clic vers la vidéo si besoin */
     }
-
-    #play-pause-button .ph {
-      font-size: 22px;
+    
+    #preview-overlay.paused #play-pause-button {
+        opacity: 1;
     }
 
     #upload-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.65);
+      background: rgba(0, 0, 0, 0.75);
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
       font-size: 17px;
-      z-index: 50;
+      z-index: 100;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
+      backdrop-filter: blur(5px);
     }
 
     #upload-overlay.active {
@@ -355,34 +341,24 @@
     }
 
     #upload-text {
-      padding: 14px 18px;
-      background: rgba(0, 0, 0, 0.7);
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+      padding: 16px 24px;
+      background: #111;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-weight: 500;
     }
 
     input[type="file"] {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: 0;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-      opacity: 0;
+      display: none;
     }
 
     .hint {
       position: absolute;
-      bottom: 108px;
+      bottom: 120px;
       width: 100%;
       text-align: center;
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.75);
-      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+      color: rgba(255, 255, 255, 0.6);
       pointer-events: none;
       transition: opacity 0.2s ease;
     }
@@ -391,19 +367,17 @@
       opacity: 0;
     }
 
-    /* Ces règles forcent la disparition des boutons spécifiques */
-    body.showing-preview #flash-btn,
-    body.showing-preview #switch-btn,
-    body.showing-preview #gallery-btn,
-    body.showing-preview .record-wrap {
-      display: none !important; /* Ajout de !important pour sécurité */
+    /* Cacher les contrôles caméra quand la preview est active */
+    body.showing-preview .controls {
+      display: none !important;
     }
   </style>
 </head>
 <body>
+
   <div id="camera-container">
-    <video id="camera-preview" playsinline muted></video>
-    <video id="recorded-preview" playsinline muted loop></video>
+    <video id="camera-preview" playsinline muted autoplay></video>
+    
     <div class="controls">
       <div class="top-bar">
         <div class="side"></div>
@@ -411,10 +385,12 @@
           <button class="btn" id="flash-btn" aria-label="Flash">⚡</button>
         </div>
       </div>
+      
       <div class="bottom-bar">
         <div class="side">
           <button class="btn" id="gallery-btn" aria-label="Gallery">🖼️</button>
         </div>
+        
         <div class="record-wrap">
           <svg class="record-progress" viewBox="0 0 100 100" aria-hidden="true">
             <circle id="record-progress-circle" cx="50" cy="50" r="46"></circle>
@@ -423,33 +399,35 @@
             <div class="record-inner"></div>
           </div>
         </div>
+        
         <div class="side">
           <button class="btn" id="switch-btn" aria-label="Switch camera">🔄</button>
         </div>
       </div>
+      
       <div class="hint hidden" id="hint"></div>
     </div>
   </div>
 
   <div id="preview-overlay">
-    <div id="preview-card">
-      <video
-        id="preview-video"
-        playsinline
-        webkit-playsinline
-        x5-playsinline
-        x5-video-player-type="h5"
-        controlsList="nofullscreen noremoteplayback nodownload"
-        disablepictureinpicture
-        muted
-      ></video>
-      <div id="preview-actions">
-        <button id="play-pause-button">
-          <i class="ph-bold ph-play"></i>
-        </button>
-        <button id="resume-button">Reprendre</button>
-        <button id="next-button">Suivant</button>
-      </div>
+    <video
+      id="preview-video"
+      playsinline
+      webkit-playsinline
+      x5-playsinline
+      x5-video-player-type="h5"
+      controlsList="nofullscreen noremoteplayback nodownload"
+      disablepictureinpicture
+      loop
+    ></video>
+
+    <div id="play-pause-button">
+        <i class="ph-fill ph-play"></i>
+    </div>
+
+    <div id="preview-actions">
+      <button id="restart-button">Recommencer</button>
+      <button id="next-button">Suivant</button>
     </div>
   </div>
 
@@ -462,20 +440,21 @@
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
-    const recordedPreview = document.getElementById('recorded-preview');
     const recordButton = document.getElementById('record-btn');
     const flashButton = document.getElementById('flash-btn');
     const switchButton = document.getElementById('switch-btn');
     const galleryButton = document.getElementById('gallery-btn');
     const hint = document.getElementById('hint');
-    const cameraInput = document.getElementById('camera-input');
     const galleryPicker = document.getElementById('galleryInput');
+    
+    // Preview Elements
     const previewOverlay = document.getElementById('preview-overlay');
     const previewVideo = document.getElementById('preview-video');
     const nextButton = document.getElementById('next-button');
-    const resumeButton = document.getElementById('resume-button');
-    const playPauseButton = document.getElementById('play-pause-button');
+    const restartButton = document.getElementById('restart-button'); // Changé de resume à restart
+    const playPauseBtn = document.getElementById('play-pause-button');
     const previewActions = document.getElementById('preview-actions');
+    
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
     const recordWrap = document.querySelector('.record-wrap');
@@ -528,7 +507,6 @@
         const segments = pathname.split('/').filter(Boolean);
         return segments.length ? segments[segments.length - 1] : '';
       } catch (error) {
-        console.warn('Failed to parse asset id', error);
         return '';
       }
     }
@@ -540,11 +518,12 @@
       flashButton.style.opacity = disabled ? 0.45 : 1;
     }
 
-    function updatePlayPauseIcon() {
-      const isPaused = previewVideo.paused;
-      const icon = playPauseButton.querySelector('.ph');
-      // Fix si l'icône n'est pas encore chargée
-      if(icon) icon.className = `ph-bold ${isPaused ? 'ph-play' : 'ph-pause'}`;
+    function updatePlayPauseUI() {
+      if (previewVideo.paused) {
+        previewOverlay.classList.add('paused');
+      } else {
+        previewOverlay.classList.remove('paused');
+      }
     }
 
     async function applyTorch(active) {
@@ -581,7 +560,7 @@
         torchEnabled = false;
         await applyTorch(false);
         cameraPreview.srcObject = mediaStream;
-        await cameraPreview.play();
+        
         setAudioEnabled(false);
         if (previousStream) {
           previousStream.getTracks().forEach((t) => t.stop());
@@ -594,7 +573,7 @@
     }
 
     async function ensureCameraStarted() {
-      if (mediaStream) return;
+      if (mediaStream && mediaStream.active) return;
       if (cameraStartPromise) return cameraStartPromise;
       cameraStartPromise = startCamera()
         .catch((error) => {
@@ -621,38 +600,9 @@
         'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
         'video/mp4',
         'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp8,opus',
         'video/webm',
       ];
       return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || '';
-    }
-
-    function pauseCameraStream() {
-      if (!mediaStream) return;
-      mediaStream.getTracks().forEach((track) => {
-        track.enabled = false;
-      });
-      cameraPreview.pause();
-    }
-
-    async function resumeCameraStream() {
-      if (!mediaStream) {
-        await ensureCameraStarted();
-      }
-      if (!mediaStream) return;
-      mediaStream.getTracks().forEach((track) => {
-        track.enabled = true;
-      });
-      if (!cameraPreview.srcObject) {
-        cameraPreview.srcObject = mediaStream;
-      }
-      cameraPreview.style.display = 'block';
-      cameraPreview.style.visibility = 'visible';
-      try {
-        await cameraPreview.play();
-      } catch (error) {
-        console.warn('Resume preview failed', error);
-      }
     }
 
     function setRecordingUI(active) {
@@ -680,16 +630,10 @@
         const elapsed = Math.min(performance.now() - recordingStart, MAX_DURATION);
         const progress = Math.min(elapsed / MAX_DURATION, 1);
         recordProgressCircle.style.strokeDashoffset = `${progressCircumference * (1 - progress)}`;
-        if (
-          progress < 1 &&
-          recordingProgressActive &&
-          mediaRecorder &&
-          mediaRecorder.state === 'recording'
-        ) {
+        if (progress < 1 && recordingProgressActive) {
           recordingProgressRAF = requestAnimationFrame(updateProgress);
         }
       };
-
       recordingProgressRAF = requestAnimationFrame(updateProgress);
     }
 
@@ -701,24 +645,14 @@
         return;
       }
 
-      if (previewOverlay.classList.contains('active')) {
-        hidePreview();
-      }
-
-      hideRecordedPreview();
-      cameraPreview.style.display = 'block';
-      cameraPreview.style.visibility = 'visible';
-
       recordedBlob = null;
-      hint.textContent = '';
-      hint.classList.add('hidden');
       recordedChunks = [];
       const mimeType = getSupportedMimeType();
+      
       try {
         mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
       } catch (error) {
-        console.error('MediaRecorder init failed', error);
-        notifyHost({ status: 'error', message: 'Recording not supported' });
+        console.error('MediaRecorder error', error);
         return;
       }
 
@@ -728,18 +662,8 @@
         }
       };
 
-      mediaRecorder.onerror = (event) => {
-        console.error('Recording error', event.error || event);
-        notifyHost({ status: 'error', message: event.error?.message || 'Recording error' });
-        stopRecording();
-      };
-
       mediaRecorder.onstop = () => {
         resetProgressRing();
-        if (recordingTimeout) {
-          clearTimeout(recordingTimeout);
-          recordingTimeout = null;
-        }
         setRecordingUI(false);
         recordButton.classList.remove('recording');
         setAudioEnabled(false);
@@ -747,42 +671,27 @@
           applyTorch(false);
         }
 
-        recordedBlob = recordedChunks.length
-          ? new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' })
-          : null;
+        recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
         mediaRecorder = null;
 
-        if (recordedBlob) {
+        if (recordedBlob && recordedBlob.size > 0) {
           showPreview(recordedBlob);
-        } else {
-          hint.textContent = '';
-          hint.classList.add('hidden');
         }
       };
 
       mediaRecorder.start();
       recordButton.classList.add('recording');
-      setRecordingUI(true);
+      setRecordingUI(true); // C'est cette fonction qui active le CSS pour cacher les boutons
       setAudioEnabled(true);
       startProgressRing();
       recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
     }
 
     function stopRecording() {
-      recordingProgressActive = false;
-      resetProgressRing();
       if (recordingTimeout) {
         clearTimeout(recordingTimeout);
         recordingTimeout = null;
       }
-
-      setRecordingUI(false);
-      recordButton.classList.remove('recording');
-      setAudioEnabled(false);
-      if (facingMode === 'environment' && torchSupported) {
-        applyTorch(false);
-      }
-
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
       }
@@ -795,87 +704,48 @@
       }
     }
 
-    function hideRecordedPreview() {
-      recordedPreview.pause();
-      recordedPreview.removeAttribute('src');
-      recordedPreview.load();
-      recordedPreview.style.display = 'none';
-    }
-
-    function showRecordedPreview(url) {
-      hideRecordedPreview();
-      recordedPreview.src = url;
-      recordedPreview.loop = true;
-      recordedPreview.muted = true;
-      recordedPreview.currentTime = 0;
-      recordedPreview.style.display = 'block';
-      const playPromise = recordedPreview.play();
-      if (playPromise && playPromise.catch) {
-        playPromise.catch((error) => console.warn('Recorded preview playback failed', error));
-      }
-      cameraPreview.style.display = 'none';
-    }
-
-    // --- CORRECTION MAJEURE ICI ---
     async function showPreview(blob) {
-      // 1. On cache l'interface de caméra TOUT DE SUITE
+      // Masquer l'UI caméra immédiatement
       document.body.classList.add('showing-preview');
       previewOverlay.classList.add('active');
       
-      // On s'assure que les actions sont clickables
-      if (previewActions) {
-        previewActions.style.display = 'flex';
-        previewActions.style.pointerEvents = 'auto';
+      // Pause le flux caméra pour économiser la batterie
+      if(mediaStream) {
+          mediaStream.getTracks().forEach(t => t.enabled = false);
       }
-      
-      pauseCameraStream();
-      hint.classList.add('hidden');
 
-      // 2. Ensuite on gère la vidéo
       cleanupPreviewURL();
       const url = URL.createObjectURL(blob);
       previewObjectURL = url;
-      recordedBlob = blob;
-
-      showRecordedPreview(url);
 
       previewVideo.src = url;
-      previewVideo.controls = false;
-      previewVideo.loop = true;
+      previewVideo.muted = false; // Son activé pour la review
       previewVideo.currentTime = 0;
-
+      
       try {
         await previewVideo.play();
-      } catch (error) {
-        previewVideo.controls = true;
-        console.warn('Auto-play prevent', error);
+      } catch (e) {
+        console.warn('Autoplay blocked', e);
       }
-
-      updatePlayPauseIcon();
+      updatePlayPauseUI();
     }
-    // -----------------------------
 
     function hidePreview() {
       previewOverlay.classList.remove('active');
-      document.body.classList.remove('showing-preview'); // Rétablissement des contrôles
+      document.body.classList.remove('showing-preview');
 
       previewVideo.pause();
-      previewVideo.removeAttribute('src');
-      previewVideo.load();
-
+      previewVideo.src = '';
       cleanupPreviewURL();
-      hideRecordedPreview();
-
-      cameraPreview.style.display = 'block';
-      cameraPreview.style.visibility = 'visible';
-
+      
+      // Réactiver la caméra
+      if(mediaStream) {
+          mediaStream.getTracks().forEach(t => t.enabled = true);
+      }
+      
+      // Recommencer à zéro
+      recordedChunks = [];
       recordedBlob = null;
-      hint.classList.add('hidden');
-    }
-
-    async function resumeRecording() {
-      hidePreview();
-      await startRecording();
     }
 
     function setUploadURL(url) {
@@ -884,7 +754,7 @@
 
     function getUploadURL() {
       const params = new URLSearchParams(window.location.search);
-      return uploadURL || params.get('upload_url') || params.get('uploadURL') || params.get('uploadUrl') || '';
+      return uploadURL || params.get('upload_url');
     }
 
     function uploadToMux() {
@@ -894,15 +764,13 @@
         notifyHost({ status: 'error', message: 'Missing upload_url' });
         return;
       }
-      uploadURL = url;
+      
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url, true);
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const pct = Math.round((event.loaded / event.total) * 100);
           uploadText.textContent = `Uploading… ${pct}%`;
-        } else {
-          uploadText.textContent = 'Uploading…';
         }
       };
       xhr.onload = () => {
@@ -911,110 +779,81 @@
           const assetId = extractAssetId(url);
           notifyHost({ status: 'ok', asset_id: assetId });
         } else {
-          notifyHost({ status: 'error', message: `Upload failed (${xhr.status})` });
+          notifyHost({ status: 'error', message: 'Upload failed' });
         }
       };
       xhr.onerror = () => {
         uploadOverlay.classList.remove('active');
-        notifyHost({ status: 'error', message: 'Upload error' });
+        notifyHost({ status: 'error', message: 'Network error' });
       };
-      xhr.setRequestHeader('Content-Type', recordedBlob.type || 'video/mp4');
+      
+      xhr.setRequestHeader('Content-Type', recordedBlob.type);
       uploadOverlay.classList.add('active');
-      uploadText.textContent = 'Uploading…';
       xhr.send(recordedBlob);
     }
 
-    function initUploadURLFromQuery() {
-      const url = getUploadURL();
-      if (url) uploadURL = url;
-    }
-
-    function handleGallerySelect(selection) {
-      const file = selection?.target?.files?.[0] || selection;
+    function handleGallerySelect(event) {
+      const file = event.target.files && event.target.files[0];
       if (!file) return;
       recordedBlob = file;
       showPreview(file);
       galleryPicker.value = '';
     }
 
-    function feednlyStop() {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-      }
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((track) => track.stop());
-        mediaStream = null;
-      }
-      hideRecordedPreview();
-      hidePreview();
-    }
-
     function setupListeners() {
-      recordButton.addEventListener('click', async () => {
+      recordButton.addEventListener('click', () => {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
           stopRecording();
         } else {
-          await startRecording();
+          startRecording();
         }
       });
 
       flashButton.addEventListener('click', toggleFlash);
+      
       switchButton.addEventListener('click', async () => {
+        switchButton.style.transform = "rotate(180deg)";
+        setTimeout(() => switchButton.style.transform = "rotate(0deg)", 300);
         await ensureCameraStarted();
         await switchCamera();
       });
-      galleryButton.addEventListener('click', feednlyOpenGallery);
+
+      galleryButton.addEventListener('click', () => {
+         galleryPicker.click();
+      });
+
+      galleryPicker.addEventListener('change', handleGallerySelect);
+
+      // Logique boutons preview
       nextButton.addEventListener('click', uploadToMux);
-      resumeButton.addEventListener('click', () => {
-        resumeRecording();
+      
+      restartButton.addEventListener('click', () => {
+        // Logique "Recommencer" : on jette la vidéo et on revient à la caméra
+        hidePreview();
       });
-      playPauseButton.addEventListener('click', () => {
-        if (previewVideo.paused) {
-          previewVideo.play();
-        } else {
-          previewVideo.pause();
-        }
+
+      // Click sur la vidéo pour play/pause
+      previewOverlay.addEventListener('click', (e) => {
+          // On ignore si on clique sur les boutons du bas
+          if (e.target.closest('#preview-actions')) return;
+
+          if (previewVideo.paused) {
+            previewVideo.play();
+          } else {
+            previewVideo.pause();
+          }
       });
-      previewVideo.addEventListener('play', updatePlayPauseIcon);
-      previewVideo.addEventListener('pause', updatePlayPauseIcon);
+      
+      previewVideo.addEventListener('play', updatePlayPauseUI);
+      previewVideo.addEventListener('pause', updatePlayPauseUI);
     }
-
-    function feednlyOpenGallery() {
-      if (!galleryPicker) return;
-      galleryPicker.setAttribute('accept', 'video/*');
-      galleryPicker.removeAttribute('capture');
-      galleryPicker.capture = '';
-      galleryPicker.value = '';
-
-      if (galleryPicker.showPicker) {
-        galleryPicker.showPicker().catch(() => galleryPicker.click());
-      } else {
-        galleryPicker.click();
-      }
-    }
-
-    galleryPicker?.addEventListener('change', (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      handleGallerySelect(event);
-      if (window.ReactNativeWebView?.postMessage) {
-        window.ReactNativeWebView.postMessage(
-          JSON.stringify({
-            status: 'selected',
-            fileName: file.name,
-          })
-        );
-      }
-    });
 
     document.addEventListener('DOMContentLoaded', async () => {
-      initUploadURLFromQuery();
       setupListeners();
       await ensureCameraStarted();
     });
-
-    window.feednlyStop = feednlyStop;
-    window.feednlyOpenGallery = feednlyOpenGallery;
+    
+    // API externe
     window.cameraModule = {
       startCamera,
       switchCamera,
@@ -1023,8 +862,7 @@
       stopRecording,
       showPreview,
       uploadToMux,
-      setUploadURL,
-      feednlyStop,
+      setUploadURL
     };
   </script>
 </body>
