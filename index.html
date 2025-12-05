@@ -9,8 +9,6 @@
     :root {
       --control-bg: rgba(0, 0, 0, 0.55);
       --control-border: rgba(255, 255, 255, 0.3);
-      --accent: #2d8cff;
-      --danger: #ff3b30;
       --text: #f5f7fb;
     }
 
@@ -19,8 +17,7 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    html,
-    body {
+    html, body {
       margin: 0;
       width: 100%;
       height: 100%;
@@ -30,9 +27,7 @@
       color: var(--text);
     }
 
-    body {
-      position: relative;
-    }
+    body { position: relative; }
 
     #camera-container {
       position: fixed;
@@ -52,6 +47,7 @@
       background: #000;
     }
 
+    /* --- UI CONTROLS --- */
     .controls {
       position: absolute;
       inset: 0;
@@ -59,8 +55,7 @@
       transition: opacity 0.3s ease;
     }
 
-    .top-bar,
-    .bottom-bar {
+    .top-bar, .bottom-bar {
       position: absolute;
       width: 100%;
       display: flex;
@@ -70,16 +65,8 @@
       pointer-events: none;
     }
 
-    .top-bar {
-      top: 0;
-      z-index: 10;
-    }
-
-    .bottom-bar {
-      bottom: 0;
-      padding-bottom: 30px;
-      z-index: 10;
-    }
+    .top-bar { top: 0; z-index: 10; }
+    .bottom-bar { bottom: 0; padding-bottom: 22px; z-index: 10; }
 
     .side {
       display: flex;
@@ -89,22 +76,17 @@
       transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
-    /* --- CSS POUR CACHER LES BOUTONS PENDANT L'ENREGISTREMENT --- */
+    /* MASQUAGE PENDANT L'ENREGISTREMENT */
     body.recording .side {
       opacity: 0;
       pointer-events: none;
       transform: scale(0.9);
     }
     
-    body.recording #flash-btn {
-      opacity: 0;
-      pointer-events: none;
-    }
-    /* ----------------------------------------------------------- */
-
+    /* Boutons ronds (Flash, Gallery, Switch) */
     .btn {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
       background: var(--control-bg);
       border: 1px solid var(--control-border);
@@ -112,34 +94,28 @@
       align-items: center;
       justify-content: center;
       color: var(--text);
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
       pointer-events: auto;
       backdrop-filter: blur(8px);
       cursor: pointer;
       transition: transform 0.2s ease, background 0.2s ease;
     }
 
-    .btn:active {
-      transform: scale(0.95);
-    }
-
-    .btn.disabled {
-      opacity: 0.45;
-      pointer-events: none;
-    }
-
+    .btn:active { transform: scale(0.95); }
+    
     .btn.flash-on {
       background: rgba(45, 140, 255, 0.22);
       border-color: rgba(45, 140, 255, 0.7);
-      color: #2d8cff;
+      box-shadow: 0 14px 28px rgba(45, 140, 255, 0.45);
     }
 
+    /* --- BOUTON D'ENREGISTREMENT (DESIGN ORIGINAL RESTAURÉ) --- */
     .record-wrap {
       position: relative;
-      width: 84px;
-      height: 84px;
+      width: 82px;
+      height: 82px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -149,8 +125,8 @@
     .record-progress {
       position: absolute;
       inset: -8px;
-      width: 100px;
-      height: 100px;
+      width: 98px;
+      height: 98px;
       transform: rotate(-90deg);
       pointer-events: none;
     }
@@ -175,35 +151,43 @@
       height: 72px;
       border-radius: 50%;
       background: #fff;
-      border: 4px solid rgba(255, 255, 255, 0.3);
+      border: 4px solid rgba(255, 255, 255, 0.35);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+      transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
     .record-button.recording {
       background: #ff3b30;
-      transform: scale(1.1);
+      border-color: rgba(255, 255, 255, 0.55);
+      animation: pulse 1.2s infinite;
     }
 
     .record-inner {
-      width: 100%;
-      height: 100%;
+      width: 56px;
+      height: 56px;
       border-radius: 50%;
       background: transparent;
-      transition: all 0.3s ease;
+      transition: background 0.2s ease, border-radius 0.2s ease, width 0.2s ease, height 0.2s ease;
     }
 
+    /* Transformation en carré arrondi quand ça enregistre */
     .record-button.recording .record-inner {
-      width: 30%;
-      height: 30%;
-      border-radius: 4px;
-      background: #fff;
+      background: #ffdad8;
+      width: 42px;
+      height: 42px;
+      border-radius: 16px;
     }
 
-    /* --- PREVIEW OVERLAY (FULL SCREEN) --- */
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(255, 59, 48, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+    }
+
+    /* --- PREVIEW ECRAN --- */
     #preview-overlay {
       position: absolute;
       inset: 0;
@@ -213,8 +197,6 @@
       pointer-events: none;
       visibility: hidden;
       transition: opacity 0.3s ease, visibility 0.3s ease;
-      display: flex;
-      flex-direction: column;
     }
 
     #preview-overlay.active {
@@ -223,35 +205,22 @@
       visibility: visible;
     }
 
-    /* La vidéo prend tout l'écran en arrière plan */
     #preview-video {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover; /* Remplit l'écran comme TikTok */
-      z-index: 1;
+      object-fit: cover;
       background: #000;
     }
 
-    /* Conteneur des boutons Play/Pause invisible au centre (optionnel) */
-    #play-pause-layer {
-      position: absolute;
-      inset: 0;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /* On peut cliquer à travers pour play/pause via JS global ou mettre un bouton géant invisible */
-    }
-
-    /* --- BARRE D'ACTIONS DU BAS --- */
+    /* --- BOUTONS PREVIEW --- */
     #preview-actions {
       position: absolute;
       bottom: 40px;
       left: 0;
       width: 100%;
-      z-index: 10;
+      z-index: 60;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -260,16 +229,14 @@
     }
 
     #preview-actions button {
-      flex: 1; /* Les deux boutons prennent la même largeur */
-      max-width: 160px; /* Limite la largeur max pour l'esthétique */
-      height: 50px;
-      border-radius: 25px;
+      flex: 1;
+      height: 52px;
       font-size: 16px;
-      font-weight: 600;
+      font-weight: 700;
       border: none;
       cursor: pointer;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-      transition: transform 0.2s ease, opacity 0.2s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      transition: transform 0.1s ease;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -279,50 +246,49 @@
       transform: scale(0.96);
     }
 
-    /* Bouton Recommencer (Style secondaire) */
+    /* Style demandé : Recommencer (Noir, Radius 8) */
     #restart-button {
-      background: rgba(255, 255, 255, 0.9);
-      color: #000;
-      backdrop-filter: blur(10px);
+      background: #000000;
+      color: #ffffff;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15); /* Petit bord subtil pour contraste sur fond noir */
     }
 
-    /* Bouton Suivant (Style primaire) */
+    /* Style demandé : Suivant (Blanc, Radius 8) */
     #next-button {
-      background: #ff3b30; /* Couleur style TikTok/Recording */
-      color: #fff;
+      background: #ffffff;
+      color: #000000;
+      border-radius: 8px;
     }
 
-    /* Bouton Play/Pause flottant (petit) */
-    #play-pause-button {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 70px;
-        height: 70px;
-        border-radius: 50%;
-        background: rgba(0,0,0,0.4);
-        backdrop-filter: blur(4px);
-        color: white;
-        border: 2px solid rgba(255,255,255,0.2);
-        z-index: 5;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 32px;
-        opacity: 0; /* Caché par défaut quand ça joue */
-        transition: opacity 0.2s ease;
-        pointer-events: none; /* Laisse passer le clic vers la vidéo si besoin */
+    /* Play Button Centré */
+    #play-pause-center {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      z-index: 55;
+      color: rgba(255,255,255,0.8);
+      font-size: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
     }
     
-    #preview-overlay.paused #play-pause-button {
-        opacity: 1;
+    #preview-overlay.paused #play-pause-center {
+      opacity: 1;
     }
 
+    /* --- UPLOAD OVERLAY --- */
     #upload-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.75);
+      background: rgba(0, 0, 0, 0.7);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -342,35 +308,31 @@
 
     #upload-text {
       padding: 16px 24px;
-      background: #111;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      font-weight: 500;
+      background: #222;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
 
+    /* Input caché */
     input[type="file"] {
       display: none;
     }
 
     .hint {
       position: absolute;
-      bottom: 120px;
+      bottom: 110px;
       width: 100%;
       text-align: center;
       font-size: 13px;
-      color: rgba(255, 255, 255, 0.6);
+      color: rgba(255, 255, 255, 0.65);
       pointer-events: none;
       transition: opacity 0.2s ease;
     }
+    .hint.hidden { opacity: 0; }
 
-    .hint.hidden {
-      opacity: 0;
-    }
-
-    /* Cacher les contrôles caméra quand la preview est active */
-    body.showing-preview .controls {
-      display: none !important;
-    }
+    /* Cacher les contrôles quand preview est active */
+    body.showing-preview .controls { display: none !important; }
   </style>
 </head>
 <body>
@@ -421,8 +383,8 @@
       loop
     ></video>
 
-    <div id="play-pause-button">
-        <i class="ph-fill ph-play"></i>
+    <div id="play-pause-center">
+        <i class="ph-fill ph-play-circle"></i>
     </div>
 
     <div id="preview-actions">
@@ -447,12 +409,10 @@
     const hint = document.getElementById('hint');
     const galleryPicker = document.getElementById('galleryInput');
     
-    // Preview Elements
     const previewOverlay = document.getElementById('preview-overlay');
     const previewVideo = document.getElementById('preview-video');
     const nextButton = document.getElementById('next-button');
-    const restartButton = document.getElementById('restart-button'); // Changé de resume à restart
-    const playPauseBtn = document.getElementById('play-pause-button');
+    const restartButton = document.getElementById('restart-button');
     const previewActions = document.getElementById('preview-actions');
     
     const uploadOverlay = document.getElementById('upload-overlay');
@@ -476,7 +436,7 @@
     let previewObjectURL = '';
     let cameraStartPromise = null;
 
-    const MAX_DURATION = 60_000; // 60 seconds
+    const MAX_DURATION = 60_000;
 
     recordProgressCircle.style.strokeDasharray = `${progressCircumference} ${progressCircumference}`;
     recordProgressCircle.style.strokeDashoffset = `${progressCircumference}`;
@@ -535,7 +495,6 @@
         await track.applyConstraints({ advanced: [{ torch: active }] });
         torchEnabled = active;
       } catch (error) {
-        console.warn('Torch apply failed', error);
         torchEnabled = false;
       }
       updateFlashButton();
@@ -560,14 +519,12 @@
         torchEnabled = false;
         await applyTorch(false);
         cameraPreview.srcObject = mediaStream;
-        
         setAudioEnabled(false);
         if (previousStream) {
           previousStream.getTracks().forEach((t) => t.stop());
         }
         updateFlashButton();
       } catch (error) {
-        console.error('Camera start failed', error);
         notifyHost({ status: 'error', message: error.message || 'Camera unavailable' });
       }
     }
@@ -576,12 +533,8 @@
       if (mediaStream && mediaStream.active) return;
       if (cameraStartPromise) return cameraStartPromise;
       cameraStartPromise = startCamera()
-        .catch((error) => {
-          console.error('Failed to initialize camera', error);
-        })
-        .finally(() => {
-          cameraStartPromise = null;
-        });
+        .catch((error) => console.error(error))
+        .finally(() => { cameraStartPromise = null; });
       return cameraStartPromise;
     }
 
@@ -624,7 +577,6 @@
       resetProgressRing();
       recordingStart = performance.now();
       recordingProgressActive = true;
-
       const updateProgress = () => {
         if (!recordingProgressActive || !recordingStart) return;
         const elapsed = Math.min(performance.now() - recordingStart, MAX_DURATION);
@@ -652,7 +604,7 @@
       try {
         mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
       } catch (error) {
-        console.error('MediaRecorder error', error);
+        console.error('Recorder error', error);
         return;
       }
 
@@ -670,10 +622,8 @@
         if (facingMode === 'environment' && torchSupported) {
           applyTorch(false);
         }
-
         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
         mediaRecorder = null;
-
         if (recordedBlob && recordedBlob.size > 0) {
           showPreview(recordedBlob);
         }
@@ -681,7 +631,7 @@
 
       mediaRecorder.start();
       recordButton.classList.add('recording');
-      setRecordingUI(true); // C'est cette fonction qui active le CSS pour cacher les boutons
+      setRecordingUI(true);
       setAudioEnabled(true);
       startProgressRing();
       recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
@@ -705,11 +655,9 @@
     }
 
     async function showPreview(blob) {
-      // Masquer l'UI caméra immédiatement
       document.body.classList.add('showing-preview');
       previewOverlay.classList.add('active');
       
-      // Pause le flux caméra pour économiser la batterie
       if(mediaStream) {
           mediaStream.getTracks().forEach(t => t.enabled = false);
       }
@@ -719,7 +667,7 @@
       previewObjectURL = url;
 
       previewVideo.src = url;
-      previewVideo.muted = false; // Son activé pour la review
+      previewVideo.muted = false;
       previewVideo.currentTime = 0;
       
       try {
@@ -738,12 +686,9 @@
       previewVideo.src = '';
       cleanupPreviewURL();
       
-      // Réactiver la caméra
       if(mediaStream) {
           mediaStream.getTracks().forEach(t => t.enabled = true);
       }
-      
-      // Recommencer à zéro
       recordedChunks = [];
       recordedBlob = null;
     }
@@ -824,19 +769,11 @@
 
       galleryPicker.addEventListener('change', handleGallerySelect);
 
-      // Logique boutons preview
       nextButton.addEventListener('click', uploadToMux);
-      
-      restartButton.addEventListener('click', () => {
-        // Logique "Recommencer" : on jette la vidéo et on revient à la caméra
-        hidePreview();
-      });
+      restartButton.addEventListener('click', hidePreview);
 
-      // Click sur la vidéo pour play/pause
       previewOverlay.addEventListener('click', (e) => {
-          // On ignore si on clique sur les boutons du bas
           if (e.target.closest('#preview-actions')) return;
-
           if (previewVideo.paused) {
             previewVideo.play();
           } else {
@@ -853,7 +790,6 @@
       await ensureCameraStarted();
     });
     
-    // API externe
     window.cameraModule = {
       startCamera,
       switchCamera,
