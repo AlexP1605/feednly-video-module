@@ -77,10 +77,9 @@
         if (mode === "camera") {
           fileInput.setAttribute("capture", "environment");
         } else {
-          // Hint to Android to skip the system chooser and jump straight to the gallery.
-          // While not part of the formal spec, many browsers respect `capture=filesystem`
-          // to avoid offering the camera option when selecting videos.
-          fileInput.setAttribute("capture", "filesystem");
+          // Ensure we explicitly clear the capture hint when opening the gallery, otherwise
+          // some browsers (notably on Android) keep offering the camera.
+          fileInput.removeAttribute("capture");
         }
       }
 
