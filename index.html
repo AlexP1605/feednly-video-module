@@ -83,6 +83,11 @@
       transform: scale(0.9);
     }
     
+    body.recording #flash-btn {
+      opacity: 0;
+      pointer-events: none;
+    }
+
     /* Boutons ronds (Flash, Gallery, Switch) */
     .btn {
       width: 42px;
@@ -111,7 +116,7 @@
       box-shadow: 0 14px 28px rgba(45, 140, 255, 0.45);
     }
 
-    /* --- BOUTON D'ENREGISTREMENT (DESIGN ORIGINAL RESTAURÉ) --- */
+    /* --- BOUTON D'ENREGISTREMENT (AVEC LE "VOILE" ROUGE) --- */
     .record-wrap {
       position: relative;
       width: 82px;
@@ -159,6 +164,7 @@
       transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
+    /* C'est ici l'animation du "voile rouge" (pulse) */
     .record-button.recording {
       background: #ff3b30;
       border-color: rgba(255, 255, 255, 0.55);
@@ -173,7 +179,6 @@
       transition: background 0.2s ease, border-radius 0.2s ease, width 0.2s ease, height 0.2s ease;
     }
 
-    /* Transformation en carré arrondi quand ça enregistre */
     .record-button.recording .record-inner {
       background: #ffdad8;
       width: 42px;
@@ -182,9 +187,15 @@
     }
 
     @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
-      70% { box-shadow: 0 0 0 12px rgba(255, 59, 48, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+      0% {
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
+      }
+      70% {
+        box-shadow: 0 0 0 12px rgba(255, 59, 48, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+      }
     }
 
     /* --- PREVIEW ECRAN --- */
@@ -251,7 +262,7 @@
       background: #000000;
       color: #ffffff;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15); /* Petit bord subtil pour contraste sur fond noir */
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
     /* Style demandé : Suivant (Blanc, Radius 8) */
@@ -261,40 +272,17 @@
       border-radius: 8px;
     }
 
-    /* Play Button Centré */
-    #play-pause-center {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80px;
-      height: 80px;
-      z-index: 55;
-      color: rgba(255,255,255,0.8);
-      font-size: 50px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-    
-    #preview-overlay.paused #play-pause-center {
-      opacity: 1;
-    }
-
     /* --- UPLOAD OVERLAY --- */
     #upload-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.85); /* Fond plus sombre pour bien voir */
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
       font-size: 17px;
-      z-index: 100;
+      z-index: 200; /* Très haut pour passer au dessus de tout */
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
@@ -307,11 +295,14 @@
     }
 
     #upload-text {
-      padding: 16px 24px;
-      background: #222;
+      padding: 20px 30px;
+      background: #1a1a1a;
       border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+      font-weight: 600;
+      text-align: center;
+      min-width: 200px;
     }
 
     /* Input caché */
@@ -383,10 +374,6 @@
       loop
     ></video>
 
-    <div id="play-pause-center">
-        <i class="ph-fill ph-play-circle"></i>
-    </div>
-
     <div id="preview-actions">
       <button id="restart-button">Recommencer</button>
       <button id="next-button">Suivant</button>
@@ -394,10 +381,11 @@
   </div>
 
   <div id="upload-overlay">
-    <div id="upload-text">Uploading…</div>
+    <div id="upload-text">Préparation...</div>
   </div>
 
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
+  
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
@@ -476,14 +464,6 @@
       flashButton.classList.toggle('disabled', disabled);
       flashButton.classList.toggle('flash-on', torchEnabled && !disabled);
       flashButton.style.opacity = disabled ? 0.45 : 1;
-    }
-
-    function updatePlayPauseUI() {
-      if (previewVideo.paused) {
-        previewOverlay.classList.add('paused');
-      } else {
-        previewOverlay.classList.remove('paused');
-      }
     }
 
     async function applyTorch(active) {
@@ -675,7 +655,6 @@
       } catch (e) {
         console.warn('Autoplay blocked', e);
       }
-      updatePlayPauseUI();
     }
 
     function hidePreview() {
@@ -699,41 +678,56 @@
 
     function getUploadURL() {
       const params = new URLSearchParams(window.location.search);
-      return uploadURL || params.get('upload_url');
+      return uploadURL || params.get('upload_url') || params.get('uploadUrl');
     }
 
     function uploadToMux() {
       if (!recordedBlob) return;
       const url = getUploadURL();
+      
+      // Affichage immédiat de l'overlay même si pas d'URL encore
+      uploadOverlay.classList.add('active');
+      uploadText.textContent = 'Préparation...';
+
       if (!url) {
+        uploadText.textContent = 'Erreur: URL manquante';
         notifyHost({ status: 'error', message: 'Missing upload_url' });
+        setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
         return;
       }
       
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url, true);
+      
+      // Gestion du pourcentage
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const pct = Math.round((event.loaded / event.total) * 100);
-          uploadText.textContent = `Uploading… ${pct}%`;
+          uploadText.textContent = `Téléchargement… ${pct}%`;
         }
       };
+      
       xhr.onload = () => {
-        uploadOverlay.classList.remove('active');
         if (xhr.status >= 200 && xhr.status < 300) {
-          const assetId = extractAssetId(url);
-          notifyHost({ status: 'ok', asset_id: assetId });
+            uploadText.textContent = 'Terminé !';
+            const assetId = extractAssetId(url);
+            notifyHost({ status: 'ok', asset_id: assetId });
+            // On laisse affiché un instant
+            setTimeout(() => uploadOverlay.classList.remove('active'), 1000);
         } else {
-          notifyHost({ status: 'error', message: 'Upload failed' });
+            uploadText.textContent = 'Erreur téléchargement';
+            notifyHost({ status: 'error', message: 'Upload failed' });
+            setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
         }
       };
+      
       xhr.onerror = () => {
-        uploadOverlay.classList.remove('active');
+        uploadText.textContent = 'Erreur réseau';
         notifyHost({ status: 'error', message: 'Network error' });
+        setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
       };
       
       xhr.setRequestHeader('Content-Type', recordedBlob.type);
-      uploadOverlay.classList.add('active');
       xhr.send(recordedBlob);
     }
 
@@ -780,12 +774,13 @@
             previewVideo.pause();
           }
       });
-      
-      previewVideo.addEventListener('play', updatePlayPauseUI);
-      previewVideo.addEventListener('pause', updatePlayPauseUI);
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
+      // Init URL si présente dans les params
+      const qUrl = getUploadURL();
+      if(qUrl) setUploadURL(qUrl);
+      
       setupListeners();
       await ensureCameraStarted();
     });
