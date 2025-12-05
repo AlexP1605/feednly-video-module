@@ -134,6 +134,30 @@
       pointer-events: auto;
     }
 
+    .record-progress {
+      position: absolute;
+      inset: -8px;
+      width: 98px;
+      height: 98px;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
+
+    .record-progress circle {
+      fill: none;
+      stroke: rgba(255, 59, 48, 0.95);
+      stroke-width: 6px;
+      stroke-linecap: round;
+      stroke-dasharray: 0 999;
+      stroke-dashoffset: 0;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .record-wrap.recording .record-progress circle {
+      opacity: 1;
+    }
+
     .record-button {
       width: 72px;
       height: 72px;
@@ -200,6 +224,14 @@
     #preview-overlay.active {
       opacity: 1;
       pointer-events: auto;
+    }
+
+    body.recording #switch-btn,
+    body.recording #flash-btn {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(4px) scale(0.9);
+      transition: opacity 0.2s ease, transform 0.2s ease;
     }
 
     #preview-video {
@@ -343,6 +375,9 @@
           <button class="btn" id="gallery-btn" aria-label="Gallery">🖼️</button>
         </div>
         <div class="record-wrap">
+          <svg class="record-progress" viewBox="0 0 100 100" aria-hidden="true">
+            <circle id="record-progress-circle" cx="50" cy="50" r="46"></circle>
+          </svg>
           <div class="record-button" id="record-btn">
             <div class="record-inner"></div>
           </div>
@@ -389,11 +424,16 @@
     const playPauseButton = document.getElementById('play-pause-button');
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
+    const recordWrap = document.querySelector('.record-wrap');
+    const recordProgressCircle = document.getElementById('record-progress-circle');
 
     let mediaStream = null;
     let mediaRecorder = null;
     let recordedChunks = [];
     let recordingTimeout = null;
+    let recordingStart = null;
+    let recordingProgressRAF = null;
+    const progressCircumference = 2 * Math.PI * 46;
     let facingMode = 'environment';
     let torchSupported = false;
     let torchEnabled = false;
@@ -402,6 +442,9 @@
     let cameraStartPromise = null;
 
     const MAX_DURATION = 60_000; // 60 seconds
+
+    recordProgressCircle.style.strokeDasharray = `${progressCircumference} ${progressCircumference}`;
+    recordProgressCircle.style.strokeDashoffset = `${progressCircumference}`;
 
     function setAudioEnabled(active) {
       if (!mediaStream) return;
@@ -543,6 +586,37 @@
       cameraPreview.play();
     }
 
+    function setRecordingUI(active) {
+      document.body.classList.toggle('recording', active);
+      recordWrap.classList.toggle('recording', active);
+    }
+
+    function resetProgressRing() {
+      recordProgressCircle.style.strokeDashoffset = `${progressCircumference}`;
+      if (recordingProgressRAF) {
+        cancelAnimationFrame(recordingProgressRAF);
+        recordingProgressRAF = null;
+      }
+      recordingStart = null;
+    }
+
+    function startProgressRing() {
+      resetProgressRing();
+      recordingStart = performance.now();
+
+      const updateProgress = () => {
+        if (!recordingStart) return;
+        const elapsed = Math.min(performance.now() - recordingStart, MAX_DURATION);
+        const progress = Math.min(elapsed / MAX_DURATION, 1);
+        recordProgressCircle.style.strokeDashoffset = `${progressCircumference * (1 - progress)}`;
+        if (progress < 1 && mediaRecorder && mediaRecorder.state === 'recording') {
+          recordingProgressRAF = requestAnimationFrame(updateProgress);
+        }
+      };
+
+      recordingProgressRAF = requestAnimationFrame(updateProgress);
+    }
+
     async function startRecording() {
       if (!mediaStream) {
         await ensureCameraStarted();
@@ -574,6 +648,8 @@
       mediaRecorder.onstop = () => {
         recordButton.classList.remove('recording');
         setAudioEnabled(false);
+        setRecordingUI(false);
+        resetProgressRing();
         if (recordingTimeout) {
           clearTimeout(recordingTimeout);
           recordingTimeout = null;
@@ -592,8 +668,10 @@
 
       mediaRecorder.start(1000);
       recordButton.classList.add('recording');
+      setRecordingUI(true);
       recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
       setAudioEnabled(true);
+      startProgressRing();
     }
 
     function stopRecording() {
@@ -741,8 +819,9 @@
 
     function feednlyOpenGallery() {
       if (!galleryPicker) return;
+      galleryPicker.setAttribute('accept', 'video/*');
       galleryPicker.removeAttribute('capture');
-      galleryPicker.capture = null;
+      galleryPicker.capture = '';
       galleryPicker.value = '';
 
       if (galleryPicker.showPicker) {
