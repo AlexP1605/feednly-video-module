@@ -434,6 +434,7 @@
     let recordingTimeout = null;
     let recordingStart = null;
     let recordingProgressRAF = null;
+    let isStartingRecording = false;
     const progressCircumference = 2 * Math.PI * 46;
     let facingMode = 'environment';
     let torchSupported = false;
@@ -623,7 +624,9 @@
         await ensureCameraStarted();
       }
       if (!mediaStream) return;
+      if (isStartingRecording) return;
       if (mediaRecorder && mediaRecorder.state === 'recording') return;
+      isStartingRecording = true;
       if (previewOverlay.classList.contains('active')) {
         hidePreview();
       }
@@ -637,6 +640,7 @@
       } catch (error) {
         console.error('MediaRecorder init failed', error);
         notifyHost({ status: 'error', message: 'Recording not supported' });
+        isStartingRecording = false;
         return;
       }
 
@@ -659,6 +663,7 @@
           ? new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' })
           : null;
         mediaRecorder = null;
+        isStartingRecording = false;
         if (recordedBlob) {
           showPreview(recordedBlob);
         } else {
@@ -673,9 +678,13 @@
       recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
       setAudioEnabled(true);
       startProgressRing();
+      isStartingRecording = false;
     }
 
     function stopRecording() {
+      if (isStartingRecording) {
+        return;
+      }
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
       }
