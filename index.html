@@ -4,11 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Camera Pro</title>
-  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/icons.css" />
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.6);
-      --glass-border: rgba(255, 255, 255, 0.15);
+      --glass-border: rgba(255, 255, 255, 0.2);
       --text: #ffffff;
       --primary: #ff3b30;
     }
@@ -17,6 +16,7 @@
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
+      -webkit-touch-callout: none;
     }
 
     html, body {
@@ -26,47 +26,57 @@
       background: #000;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      color: var(--text);
     }
 
-    /* --- VIDEO CONTAINERS --- */
+    /* --- VIDEO LAYERS --- */
     #camera-container, #preview-overlay {
       position: fixed;
       inset: 0;
       width: 100%;
       height: 100%;
       background: #000;
-      z-index: 0;
+      overflow: hidden;
     }
 
-    /* Le z-index est important ici pour la superposition */
-    #preview-overlay { z-index: 50; }
+    #preview-overlay { 
+      z-index: 50; 
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    #preview-overlay.active { 
+      opacity: 1; 
+      visibility: visible;
+      pointer-events: auto;
+    }
 
     video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
-      /* Suppression radicale des contrôles natifs */
+      /* CRUCIAL : Empêche toute interaction native avec la vidéo */
       pointer-events: none; 
     }
 
-    /* Hack CSS pour cacher les boutons play/pause fantômes sur iOS/Android */
+    /* HACK SUPRÊME pour cacher les boutons natifs Play/Pause */
     video::-webkit-media-controls,
     video::-webkit-media-controls-play-button,
-    video::-webkit-media-controls-start-playback-button {
+    video::-webkit-media-controls-start-playback-button,
+    video::-webkit-media-controls-panel {
       display: none !important;
       -webkit-appearance: none;
       opacity: 0;
     }
 
-    /* --- UI LAYER --- */
+    /* --- INTERFACE --- */
     .controls {
       position: absolute;
       inset: 0;
       pointer-events: none;
       z-index: 20;
-      transition: opacity 0.3s ease;
     }
 
     .top-bar {
@@ -88,14 +98,7 @@
       justify-content: space-between;
     }
 
-    /* Masquer l'interface pendant l'enregistrement */
-    body.recording .side, 
-    body.recording .top-bar {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    /* --- NOUVEAUX BOUTONS MODERNES (Glassmorphism) --- */
+    /* --- BOUTONS (SVG INCLUS) --- */
     .side { pointer-events: auto; }
 
     .btn {
@@ -107,25 +110,27 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
-      font-size: 24px; /* Taille des icônes Phosphor */
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      transition: transform 0.2s, background 0.2s;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: transform 0.1s;
+    }
+    
+    .btn svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
     }
 
-    .btn:active { transform: scale(0.92); background: rgba(50,50,50,0.8); }
+    .btn:active { transform: scale(0.9); }
 
     .btn.flash-on {
-      color: #ffd60a;
-      background: rgba(255, 214, 10, 0.15);
-      border-color: rgba(255, 214, 10, 0.4);
-      box-shadow: 0 0 15px rgba(255, 214, 10, 0.2);
+      background: rgba(255, 215, 0, 0.2);
+      border-color: rgba(255, 215, 0, 0.5);
     }
+    .btn.flash-on svg { fill: #ffd700; }
 
-    /* --- BOUTON D'ENREGISTREMENT (Ton design original) --- */
+    /* --- RECORD BUTTON --- */
     .record-wrap {
       position: relative;
       width: 84px;
@@ -151,7 +156,6 @@
       stroke-width: 6px;
       stroke-linecap: round;
       stroke-dasharray: 0 999;
-      stroke-dashoffset: 0;
       transition: stroke-dashoffset 0.1s linear;
     }
 
@@ -164,53 +168,45 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
 
-    /* Animation Pulse Rouge */
-    .record-button.recording {
+    /* Animation quand on enregistre */
+    body.recording .record-button {
       background: var(--primary);
-      border-color: rgba(255, 255, 255, 0.6);
       transform: scale(1.15);
+      border-color: rgba(255,255,255,0.6);
       animation: pulse 1.5s infinite;
+    }
+    
+    body.recording .record-inner {
+      width: 40%;
+      height: 40%;
+      background: #fff;
+      border-radius: 6px;
+    }
+    
+    body.recording .side, 
+    body.recording .top-bar {
+      opacity: 0;
+      pointer-events: none;
     }
 
     .record-inner {
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      background: transparent;
       transition: all 0.3s;
-    }
-
-    .record-button.recording .record-inner {
-      width: 40%;
-      height: 40%;
-      background: #fff;
-      border-radius: 6px;
     }
 
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); }
-      70% { box-shadow: 0 0 0 14px rgba(255, 59, 48, 0); }
+      70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
     }
 
-    /* --- PREVIEW SCREEN --- */
-    #preview-overlay {
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
-      pointer-events: none;
-    }
-
-    #preview-overlay.active {
-      opacity: 1;
-      visibility: visible;
-      pointer-events: auto;
-    }
-
+    /* --- PREVIEW ACTIONS --- */
     #preview-actions {
       position: absolute;
       bottom: 40px;
@@ -218,25 +214,20 @@
       width: 100%;
       z-index: 60;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
+      gap: 15px;
       padding: 0 24px;
     }
 
     .action-btn {
       flex: 1;
-      height: 54px;
+      height: 52px;
       font-size: 16px;
       font-weight: 700;
       border: none;
       cursor: pointer;
-      border-radius: 12px; /* Un peu plus arrondi pour être moderne */
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-      transition: transform 0.1s;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     }
-
-    .action-btn:active { transform: scale(0.97); }
 
     #restart-button {
       background: #111;
@@ -249,7 +240,7 @@
       color: #000;
     }
 
-    /* --- UPLOAD OVERLAY --- */
+    /* --- UPLOAD LOADER --- */
     #upload-overlay {
       position: fixed;
       inset: 0;
@@ -264,20 +255,18 @@
       transition: opacity 0.2s;
     }
     #upload-overlay.active { opacity: 1; pointer-events: auto; }
-
+    
     #upload-text {
-      margin-top: 15px;
+      margin-top: 20px;
       color: white;
-      font-size: 18px;
       font-weight: 600;
+      font-size: 18px;
     }
 
+    /* INPUTS */
     input[type="file"] { display: none; }
     
-    /* Utilitaires */
-    .hidden { opacity: 0 !important; pointer-events: none !important; }
-    
-    /* Masquer l'interface quand preview est là */
+    /* Utility */
     body.showing-preview .controls { display: none !important; }
 
   </style>
@@ -289,12 +278,16 @@
     
     <div class="controls">
       <div class="top-bar">
-        <button class="btn" id="flash-btn"><i class="ph-fill ph-lightning"></i></button>
+        <button class="btn" id="flash-btn">
+          <svg viewBox="0 0 256 256"><path d="M240,102.21,152.88,10.66A8,8,0,0,0,140.56,12l-8,88H64a8,8,0,0,0-5.66,13.66l96,96A8,8,0,0,0,168,204V152h64a8,8,0,0,0,8-8A8.07,8.07,0,0,0,240,102.21ZM160,190.06l-67.62-67.62L132.32,136H55.48l59.64-89.46L126,112h83.65Z"></path></svg>
+        </button>
       </div>
       
       <div class="bottom-bar">
         <div class="side">
-          <button class="btn" id="gallery-btn"><i class="ph-fill ph-image"></i></button>
+          <button class="btn" id="gallery-btn">
+            <svg viewBox="0 0 256 256"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm0,160H40V56H216V200Zm-60-96a12,12,0,1,1,12-12A12,12,0,0,1,156,104ZM40,188,86.29,126.3a8,8,0,0,1,12.59-.22l28.53,35.66,41.3-51.62a8,8,0,0,1,12.5,0L216,153.28V200H40Z"></path></svg>
+          </button>
         </div>
         
         <div class="record-wrap">
@@ -307,7 +300,9 @@
         </div>
         
         <div class="side">
-          <button class="btn" id="switch-btn"><i class="ph-bold ph-arrows-clockwise"></i></button>
+          <button class="btn" id="switch-btn">
+            <svg viewBox="0 0 256 256"><path d="M224,128a96,96,0,0,1-94.71,96H128a8,8,0,0,1,0-16h1.29a80,80,0,1,0-76.08-49.1,8,8,0,0,1-15.08-5.4A96,96,0,1,1,224,128Zm-59.61,46.34a8,8,0,0,0-11.31,11.32l32,32a8,8,0,0,0,11.32,0l32-32a8,8,0,0,0-11.32-11.32L196,195.69Z"></path></svg>
+          </button>
         </div>
       </div>
     </div>
@@ -330,7 +325,7 @@
   </div>
 
   <div id="upload-overlay">
-    <div style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.3);border-top:4px solid #fff;border-radius:50%;animation:spin 1s linear infinite;"></div>
+    <div style="width:40px;height:40px;border:4px solid rgba(255,255,255,0.2);border-top:4px solid #fff;border-radius:50%;animation:spin 1s linear infinite;"></div>
     <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
     <div id="upload-text">Préparation...</div>
   </div>
@@ -354,7 +349,6 @@
     
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
-    const recordWrap = document.querySelector('.record-wrap');
     const progressCircle = document.getElementById('record-progress-circle');
 
     let mediaStream = null;
@@ -363,8 +357,7 @@
     let isRecording = false;
     let recordedBlob = null;
     let previewObjectURL = null;
-    let cameraStartPromise = null;
-
+    
     let facingMode = 'environment';
     let torchSupported = false;
     let torchEnabled = false;
@@ -372,141 +365,108 @@
 
     const MAX_DURATION = 60000;
     const circumference = 2 * Math.PI * 46;
-    
-    // Init Progress
-    progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-    progressCircle.style.strokeDashoffset = circumference;
     let recordingStartTime = 0;
     let progressInterval = null;
+    
+    // Init Circle
+    progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+    progressCircle.style.strokeDashoffset = circumference;
 
-    // --- MESSAGERIE BUBBLE ---
+    // --- UTILS ---
     function notifyHost(payload) {
       try {
         const msg = JSON.stringify(payload);
-        // Compatibilité Web & Native
         if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
         else if (window.parent) window.parent.postMessage(msg, '*');
       } catch (e) { console.error(e); }
     }
 
-    function extractAssetId(url) {
-      try {
-        const parts = new URL(url).pathname.split('/');
-        return parts[parts.length - 1];
-      } catch (e) { return ''; }
+    function getUploadURL() {
+      const p = new URLSearchParams(window.location.search);
+      let u = uploadURL || p.get('upload_url') || p.get('url');
+      if(!u) {
+        try { u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url'); } catch(e){}
+      }
+      return u;
     }
 
-    // --- CAMERA ---
+    // --- CAMERA ENGINE ---
     async function startCamera() {
-      if (mediaStream) {
-         mediaStream.getTracks().forEach(t => t.stop());
-      }
-
-      const constraints = {
-        audio: true,
-        video: {
-          facingMode: facingMode,
-          width: { ideal: 1080 },
-          height: { ideal: 1920 }
-        }
-      };
+      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
       try {
-        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { facingMode: facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } }
+        });
         cameraPreview.srcObject = mediaStream;
         
-        // Torch Check
+        // Torch
         const track = mediaStream.getVideoTracks()[0];
         const caps = track.getCapabilities ? track.getCapabilities() : {};
         torchSupported = !!caps.torch && facingMode === 'environment';
-        
         flashBtn.style.opacity = torchSupported ? '1' : '0.3';
-        flashBtn.style.pointerEvents = torchSupported ? 'auto' : 'none';
         
       } catch (err) {
         notifyHost({ status: 'error', message: 'Camera access denied' });
       }
     }
 
-    async function ensureCamera() {
-      if (!mediaStream || !mediaStream.active) {
-        if (!cameraStartPromise) cameraStartPromise = startCamera().finally(() => cameraStartPromise = null);
-        return cameraStartPromise;
-      }
-    }
-
     // --- RECORDING ---
     async function startRecording() {
       if (isRecording) return;
-      await ensureCamera();
+      if (!mediaStream || !mediaStream.active) await startCamera();
 
       recordedChunks = [];
-      const options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
-      
-      try {
-        mediaRecorder = new MediaRecorder(mediaStream, options);
-      } catch (e) {
-        mediaRecorder = new MediaRecorder(mediaStream);
-      }
+      const mime = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' : '';
+      try { mediaRecorder = new MediaRecorder(mediaStream, mime ? {mimeType: mime} : {}); } 
+      catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
 
-      mediaRecorder.ondataavailable = e => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
-      };
-
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
-        recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/mp4' });
+        recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
         isRecording = false;
-        cleanupProgress();
-        stopTorch();
-        showPreview(recordedBlob);
+        finalizeRecording();
       };
 
       mediaRecorder.start();
       isRecording = true;
       document.body.classList.add('recording');
-      recordBtn.classList.add('recording');
-
-      // Progress Animation
+      
+      // Timer
       recordingStartTime = Date.now();
       progressCircle.style.strokeDashoffset = circumference;
-      
-      const animate = () => {
+      const tick = () => {
         if (!isRecording) return;
-        const elapsed = Date.now() - recordingStartTime;
-        const progress = Math.min(elapsed / MAX_DURATION, 1);
+        const progress = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
         progressCircle.style.strokeDashoffset = circumference * (1 - progress);
-        
-        if (progress < 1) progressInterval = requestAnimationFrame(animate);
+        if (progress < 1) progressInterval = requestAnimationFrame(tick);
         else stopRecording();
       };
-      progressInterval = requestAnimationFrame(animate);
+      progressInterval = requestAnimationFrame(tick);
     }
 
     function stopRecording() {
-      if (!isRecording || !mediaRecorder) return;
-      mediaRecorder.stop();
+      if (isRecording && mediaRecorder) mediaRecorder.stop();
     }
 
-    function cleanupProgress() {
+    function finalizeRecording() {
       cancelAnimationFrame(progressInterval);
       document.body.classList.remove('recording');
-      recordBtn.classList.remove('recording');
       progressCircle.style.strokeDashoffset = circumference;
+      stopTorch();
+      showPreview(recordedBlob);
     }
 
     // --- PREVIEW ---
     function showPreview(blob) {
       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
       previewObjectURL = URL.createObjectURL(blob);
-      
       previewVideo.src = previewObjectURL;
-      previewVideo.muted = false;
       
       document.body.classList.add('showing-preview');
       previewOverlay.classList.add('active');
-
-      // Tentative de lecture auto sans son interface
-      previewVideo.play().catch(e => console.log('Autoplay blocked'));
+      previewVideo.play().catch(()=>{});
     }
 
     function hidePreview() {
@@ -518,133 +478,94 @@
       recordedBlob = null;
     }
 
-    // --- GALLERY ---
-    // Si l'utilisateur clique sur "Take Video" dans le menu système de la galerie,
-    // le fichier revient ici exactement comme une vidéo choisie dans l'album.
-    // C'est géré nativement et ça marche parfaitement !
+    // --- FILE HANDLING (60S CHECK) ---
     function handleFile(e) {
       const file = e.target.files[0];
-      if (file) {
+      if (!file) return;
+
+      // Verif Durée
+      const v = document.createElement('video');
+      v.preload = 'metadata';
+      v.onloadedmetadata = function() {
+        window.URL.revokeObjectURL(v.src);
+        if (v.duration > 61) {
+          alert("Vidéo trop longue (max 60s).");
+          galleryInput.value = '';
+          return;
+        }
         recordedBlob = file;
         showPreview(file);
-        galleryInput.value = ''; // Reset
-      }
+        galleryInput.value = '';
+      };
+      v.src = URL.createObjectURL(file);
     }
 
     // --- UPLOAD ---
-    function getUploadURL() {
-      const params = new URLSearchParams(window.location.search);
-      let url = uploadURL || params.get('upload_url') || params.get('url');
-      if (!url) {
-         try { // Check iframe src params
-           const frameParams = new URLSearchParams(window.frameElement?.src?.split('?')[1]);
-           url = frameParams.get('upload_url');
-         } catch(e) {}
-      }
-      return url;
-    }
-
     function uploadToMux() {
       const url = getUploadURL();
-      
       uploadOverlay.classList.add('active');
       uploadText.textContent = "0%";
 
       if (!url || !recordedBlob) {
         uploadText.textContent = "Erreur URL";
-        setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
+        setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
         return;
       }
 
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url, true);
       xhr.setRequestHeader('Content-Type', recordedBlob.type);
-
+      
       xhr.upload.onprogress = e => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 100);
-          uploadText.textContent = `${pct}%`;
-        }
+        if (e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%";
       };
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-           uploadText.textContent = "Terminé";
-           const assetId = extractAssetId(url);
-           
-           // Envoi du succès à Bubble pour passer à la page suivante
-           notifyHost({ 
-             status: 'success', 
-             action: 'next_page', 
-             asset_id: assetId 
-           });
-           
+        if (xhr.status < 300) {
+          uploadText.textContent = "Succès";
+          const assetId = url.split('/').pop().split('?')[0];
+          notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
         } else {
-           uploadText.textContent = "Échec";
-           setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
+          uploadText.textContent = "Échec";
+          setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
         }
-      };
-      
-      xhr.onerror = () => {
-        uploadText.textContent = "Erreur Réseau";
-        setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
       };
 
       xhr.send(recordedBlob);
     }
 
-    // --- TOOLS ---
+    // --- HELPERS ---
     async function stopTorch() {
       if (torchEnabled && mediaStream) {
-        const track = mediaStream.getVideoTracks()[0];
-        try { await track.applyConstraints({ advanced: [{ torch: false }] }); } catch(e){}
-        torchEnabled = false;
-        flashBtn.classList.remove('flash-on');
+         try { await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:false}]}); } catch(e){}
+         torchEnabled = false;
+         flashBtn.classList.remove('flash-on');
       }
     }
 
-    async function toggleFlash() {
-      if (!mediaStream || !torchSupported) return;
-      const track = mediaStream.getVideoTracks()[0];
-      try {
-        torchEnabled = !torchEnabled;
-        await track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
-        flashBtn.classList.toggle('flash-on', torchEnabled);
-      } catch (e) { torchEnabled = !torchEnabled; }
-    }
+    flashBtn.onclick = async () => {
+       if (!mediaStream || !torchSupported) return;
+       try {
+         torchEnabled = !torchEnabled;
+         await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:torchEnabled}]});
+         flashBtn.classList.toggle('flash-on', torchEnabled);
+       } catch(e){}
+    };
 
-    function cleanup() {
-      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-    }
-
-    // --- LISTENERS ---
-    recordBtn.addEventListener('click', () => isRecording ? stopRecording() : startRecording());
+    recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
+    switchBtn.onclick = () => { facingMode = facingMode==='user'?'environment':'user'; startCamera(); };
+    galleryBtn.onclick = () => galleryInput.click();
+    galleryInput.onchange = handleFile;
+    restartBtn.onclick = hidePreview;
+    nextBtn.onclick = uploadToMux;
     
-    switchBtn.addEventListener('click', () => {
-      facingMode = facingMode === 'user' ? 'environment' : 'user';
-      startCamera();
-    });
+    // Play/Pause au clic (si pas sur boutons)
+    previewOverlay.onclick = (e) => {
+      if(!e.target.closest('.action-btn')) previewVideo.paused ? previewVideo.play() : previewVideo.pause();
+    };
 
-    flashBtn.addEventListener('click', toggleFlash);
-    
-    galleryBtn.addEventListener('click', () => galleryInput.click());
-    galleryInput.addEventListener('change', handleFile);
-
-    restartBtn.addEventListener('click', hidePreview);
-    nextBtn.addEventListener('click', uploadToMux);
-
-    // Play/Pause sur clic vidéo preview
-    previewOverlay.addEventListener('click', (e) => {
-      if (e.target.closest('.action-btn')) return;
-      previewVideo.paused ? previewVideo.play() : previewVideo.pause();
-    });
-
-    // Initialisation
-    window.addEventListener('beforeunload', cleanup);
-    document.addEventListener('DOMContentLoaded', () => {
-      startCamera();
-    });
-
+    window.onbeforeunload = () => mediaStream?.getTracks().forEach(t=>t.stop());
+    document.addEventListener('DOMContentLoaded', startCamera);
   </script>
 </body>
 </html>
