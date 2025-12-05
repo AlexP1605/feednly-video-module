@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V5</title>
+  <title>Camera Pro V6</title>
   <style>
     :root {
-      --glass-bg: rgba(20, 20, 20, 0.6);
+      --glass-bg: rgba(20, 20, 20, 0.65);
       --glass-border: rgba(255, 255, 255, 0.2);
       --primary: #ff3b30;
     }
@@ -35,42 +35,32 @@
       background: #000;
     }
 
-    /* Preview caché par défaut */
     #preview-overlay {
       position: fixed;
       inset: 0;
       z-index: 50;
       background: #000;
+      display: none;
       opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s ease;
+      transition: opacity 0.3s ease;
     }
-
-    #preview-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    #preview-overlay.active { display: block; opacity: 1; }
 
     /* VIDEO ELEMENT */
     video {
       width: 100%;
       height: 100%;
-      object-fit: cover; /* Remplit l'écran */
+      object-fit: cover;
       display: block;
       pointer-events: none;
       background: #000;
+      transform: scaleX(1); /* Par défaut normal */
     }
     
-    /* GESTION MIROIR : Seulement si la classe .mirrored est présente */
-    video.mirrored {
-      transform: scaleX(-1);
-    }
-
-    /* Masquer contrôles natifs (iOS/Android) */
+    /* Anti-Play Button */
     video::-webkit-media-controls { display: none !important; }
-    video::-webkit-media-controls-start-playback-button { display: none !important; }
 
-    /* --- UI CONTROLS --- */
+    /* --- UI --- */
     .controls {
       position: absolute;
       inset: 0;
@@ -97,7 +87,7 @@
       justify-content: space-between;
     }
 
-    /* Masquer UI pendant record */
+    /* Masquer l'interface pendant l'enregistrement */
     body.recording .controls .side, 
     body.recording .controls .top-bar {
       opacity: 0;
@@ -122,11 +112,12 @@
       -webkit-backdrop-filter: blur(10px);
     }
     .btn:active { transform: scale(0.9); }
-    .btn svg { width: 24px; height: 24px; fill: white; }
-
+    
     .btn.flash-on { background: rgba(255, 215, 0, 0.2); border-color: #ffd700; }
     .btn.flash-on svg { fill: #ffd700; }
     .btn.disabled { opacity: 0.3; pointer-events: none; }
+    
+    .btn svg { width: 24px; height: 24px; fill: white; }
 
     /* --- RECORD BUTTON --- */
     .record-wrap {
@@ -233,10 +224,10 @@
       align-items: center;
       justify-content: center;
       opacity: 0;
-      pointer-events: none;
+      visibility: hidden;
       transition: opacity 0.2s;
     }
-    #upload-overlay.active { opacity: 1; pointer-events: auto; }
+    #upload-overlay.active { opacity: 1; visibility: visible; }
     
     .spinner {
       width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite;
@@ -256,14 +247,14 @@
     
     <div class="controls">
       <div class="top-bar">
-        <button class="btn" id="flash-btn">
+        <button type="button" class="btn" id="flash-btn">
           <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"></path></svg>
         </button>
       </div>
       
       <div class="bottom-bar">
         <div class="side">
-          <button class="btn" id="gallery-btn">
+          <button type="button" class="btn" id="gallery-btn">
              <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"></path></svg>
           </button>
         </div>
@@ -278,7 +269,7 @@
         </div>
         
         <div class="side">
-          <button class="btn" id="switch-btn">
+          <button type="button" class="btn" id="switch-btn">
              <svg viewBox="0 0 24 24"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"></path></svg>
           </button>
         </div>
@@ -289,8 +280,8 @@
   <div id="preview-overlay">
     <video id="preview-video" playsinline webkit-playsinline loop></video>
     <div id="preview-actions">
-      <button id="restart-button" class="action-btn">Recommencer</button>
-      <button id="next-button" class="action-btn">Suivant</button>
+      <button type="button" id="restart-button" class="action-btn">Recommencer</button>
+      <button type="button" id="next-button" class="action-btn">Suivant</button>
     </div>
   </div>
 
@@ -339,7 +330,6 @@
     progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
     progressCircle.style.strokeDashoffset = circumference;
 
-    // --- COMMUNICATION ---
     function notifyHost(payload) {
       try {
         const msg = JSON.stringify(payload);
@@ -357,34 +347,34 @@
       return u;
     }
 
-    // --- CAMERA ENGINE ---
+    // --- CAMERA ENGINE (Le retour du code V1 pour la résolution) ---
     async function startCamera() {
-      // Pour la vitesse: on définit les contraintes AVANT
+      // Pour éviter le zoom : on demande une résolution PAYSAGE (Wide)
+      // Le téléphone comprend qu'il doit utiliser tout le capteur.
       const constraints = {
         audio: true,
         video: { 
           facingMode: facingMode,
-          // 1080p idéal, mais on demande un ratio spécifique pour éviter le ZOOM
-          // Sur mobile, height > width. 
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
-          aspectRatio: { ideal: 0.5625 } // Ratio 9:16 (Portrait) -> Empêche le zoom/crop excessif
+          width: { ideal: 1920 }, // Largeur > Hauteur force le grand angle
+          height: { ideal: 1080 }
         }
       };
 
       try {
         const newStream = await navigator.mediaDevices.getUserMedia(constraints);
         
-        // On remplace le stream le plus vite possible
+        // Arrêter proprement l'ancien flux seulement maintenant
         if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+        
         mediaStream = newStream;
         cameraPreview.srcObject = mediaStream;
 
-        // GESTION MIROIR (Correctif)
+        // --- GESTION MIROIR ---
+        // Si c'est la caméra avant ('user'), on inverse l'axe X
         if (facingMode === 'user') {
-            cameraPreview.classList.add('mirrored');
+            cameraPreview.style.transform = "scaleX(-1)";
         } else {
-            cameraPreview.classList.remove('mirrored');
+            cameraPreview.style.transform = "scaleX(1)";
         }
         
         // Torch Check
@@ -401,8 +391,7 @@
         }
         
       } catch (err) {
-        // En cas d'erreur ou si le téléphone ne supporte pas la résolution
-        notifyHost({ status: 'error', message: 'Camera start failed' });
+        notifyHost({ status: 'error', message: 'Camera start error' });
       }
     }
 
@@ -412,7 +401,6 @@
       if (!mediaStream || !mediaStream.active) await startCamera();
 
       recordedChunks = [];
-      // Priorité MP4 pour compatibilité iOS
       let options = {};
       if (MediaRecorder.isTypeSupported('video/mp4')) options = { mimeType: 'video/mp4' };
       
@@ -445,7 +433,7 @@
     }
 
     function stopRecording() {
-      if (isRecording && mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      if (isRecording && mediaRecorder) mediaRecorder.stop();
     }
 
     function finalizeRecording() {
@@ -462,7 +450,9 @@
       previewObjectURL = URL.createObjectURL(blob);
       previewVideo.src = previewObjectURL;
       
-      // Affichage instantané
+      // On retire l'effet miroir pour la lecture (la vidéo enregistrée est brute)
+      previewVideo.style.transform = "scaleX(1)";
+      
       previewOverlay.classList.add('active');
       document.body.classList.add('showing-preview');
       previewVideo.play().catch(()=>{});
@@ -477,7 +467,7 @@
       recordedBlob = null;
     }
 
-    // --- FILE HANDLING (60s check) ---
+    // --- FILE CHECK ---
     function handleFile(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -556,8 +546,10 @@
     recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
     
     switchBtn.onclick = () => {
+      // Animation visuelle
       switchBtn.style.transform = "rotate(180deg)";
       setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
+      
       facingMode = (facingMode === 'user') ? 'environment' : 'user';
       startCamera();
     };
