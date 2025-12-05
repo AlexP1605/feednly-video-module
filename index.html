@@ -759,14 +759,7 @@
       previewVideo.currentTime = 0;
       previewVideo.play();
       updatePlayPauseIcon();
-
-      recordedPreview.src = url;
-      recordedPreview.style.display = 'block';
-      recordedPreview.currentTime = 0;
-      recordedPreview.loop = true;
-      recordedPreview.muted = true;
-      recordedPreview.play();
-      cameraPreview.style.display = 'none';
+      cameraPreview.style.visibility = 'hidden';
 
       previewOverlay.classList.add('active');
       if (previewActions) {
@@ -784,11 +777,7 @@
       previewVideo.pause();
       previewVideo.removeAttribute('src');
       previewVideo.load();
-      recordedPreview.pause();
-      recordedPreview.removeAttribute('src');
-      recordedPreview.load();
-      recordedPreview.style.display = 'none';
-      cameraPreview.style.display = 'block';
+      cameraPreview.style.visibility = 'visible';
       recordedBlob = null;
       hint.textContent = '';
       hint.classList.add('hidden');
