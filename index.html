@@ -464,6 +464,7 @@
     let torchEnabled = false;
     let uploadURL = '';
     let recordedBlob = null;
+    let previewObjectURL = '';
     let cameraStartPromise = null;
 
     const MAX_DURATION = 60_000; // 60 seconds
@@ -750,14 +751,28 @@
       }
     }
 
-    function showPreview(blob) {
+    function cleanupPreviewURL() {
+      if (previewObjectURL) {
+        URL.revokeObjectURL(previewObjectURL);
+        previewObjectURL = '';
+      }
+    }
+
+    async function showPreview(blob) {
+      cleanupPreviewURL();
       const url = URL.createObjectURL(blob);
+      previewObjectURL = url;
       recordedBlob = blob;
       previewVideo.src = url;
       previewVideo.controls = false;
       previewVideo.loop = true;
       previewVideo.currentTime = 0;
-      previewVideo.play();
+      try {
+        await previewVideo.play();
+      } catch (error) {
+        console.warn('Preview autoplay failed, enabling controls', error);
+        previewVideo.controls = true;
+      }
       updatePlayPauseIcon();
       cameraPreview.style.visibility = 'hidden';
 
@@ -777,6 +792,7 @@
       previewVideo.pause();
       previewVideo.removeAttribute('src');
       previewVideo.load();
+      cleanupPreviewURL();
       cameraPreview.style.visibility = 'visible';
       recordedBlob = null;
       hint.textContent = '';
