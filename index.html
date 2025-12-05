@@ -386,6 +386,14 @@
     .hint.hidden {
       opacity: 0;
     }
+
+    /* Hide capture controls while reviewing a recording */
+    body.showing-preview #flash-btn,
+    body.showing-preview #switch-btn,
+    body.showing-preview #gallery-btn,
+    body.showing-preview .record-wrap {
+      display: none;
+    }
   </style>
 </head>
 <body>
