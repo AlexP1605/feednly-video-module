@@ -75,10 +75,12 @@
       function configureInputForMode() {
         fileInput.setAttribute("accept", "video/*");
         if (mode === "camera") {
+          fileInput.capture = "environment";
           fileInput.setAttribute("capture", "environment");
         } else {
           // Ensure we explicitly clear the capture hint when opening the gallery, otherwise
           // some browsers (notably on Android) keep offering the camera.
+          fileInput.capture = "";
           fileInput.removeAttribute("capture");
         }
       }
