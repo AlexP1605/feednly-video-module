@@ -50,6 +50,16 @@
       pointer-events: none; 
     }
 
+    /* Supprimer l'icône Play/Pause par défaut lors du lancement de la caméra */
+    #camera-preview::-webkit-media-controls-start-playback-button,
+    #camera-preview::-webkit-media-controls,
+    #camera-preview::-webkit-media-controls-enclosure,
+    #camera-preview::-webkit-media-controls-panel {
+      display: none !important;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
     /* --- UI CONTROLS --- */
     .controls {
       position: absolute;
