@@ -73,30 +73,23 @@
       }
 
       function configureInputForMode() {
+        fileInput.style.display = "none";
         fileInput.setAttribute("accept", "video/*");
+
         if (mode === "camera") {
-          fileInput.capture = "environment";
           fileInput.setAttribute("capture", "environment");
+          fileInput.capture = "environment";
         } else {
-          // Ensure we explicitly clear the capture hint when opening the gallery, otherwise
-          // some browsers (notably on Android) keep offering the camera.
-          fileInput.capture = "";
+          // Gallery must never hint at the camera; clear capture entirely.
           fileInput.removeAttribute("capture");
+          fileInput.capture = "";
         }
       }
 
       function openPicker() {
         configureInputForMode();
         fileInput.value = "";
-        if (mode === "gallery" && typeof fileInput.showPicker === "function") {
-          fileInput
-            .showPicker()
-            .catch(() => {
-              fileInput.click();
-            });
-        } else {
-          fileInput.click();
-        }
+        fileInput.click();
       }
 
       function handleError(message) {
