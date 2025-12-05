@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>TikTok Style Camera</title>
   <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/icons.css" />
   <style>
@@ -15,6 +15,7 @@
     * {
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
+      user-select: none; /* Empêche la sélection de texte accidentelle */
     }
 
     html, body {
@@ -45,6 +46,8 @@
       height: 100%;
       object-fit: cover;
       background: #000;
+      /* CORRECTION 2: Empêche les contrôles natifs du téléphone d'apparaître au clic */
+      pointer-events: none; 
     }
 
     /* --- UI CONTROLS --- */
@@ -53,6 +56,7 @@
       inset: 0;
       pointer-events: none;
       transition: opacity 0.3s ease;
+      z-index: 20; /* Au dessus de la vidéo */
     }
 
     .top-bar, .bottom-bar {
@@ -116,7 +120,7 @@
       box-shadow: 0 14px 28px rgba(45, 140, 255, 0.45);
     }
 
-    /* --- BOUTON D'ENREGISTREMENT (AVEC LE "VOILE" ROUGE) --- */
+    /* --- BOUTON D'ENREGISTREMENT --- */
     .record-wrap {
       position: relative;
       width: 82px;
@@ -164,7 +168,7 @@
       transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
-    /* C'est ici l'animation du "voile rouge" (pulse) */
+    /* Animation du "voile rouge" (pulse) */
     .record-button.recording {
       background: #ff3b30;
       border-color: rgba(255, 255, 255, 0.55);
@@ -187,15 +191,9 @@
     }
 
     @keyframes pulse {
-      0% {
-        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4);
-      }
-      70% {
-        box-shadow: 0 0 0 12px rgba(255, 59, 48, 0);
-      }
-      100% {
-        box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
-      }
+      0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(255, 59, 48, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
     }
 
     /* --- PREVIEW ECRAN --- */
@@ -257,7 +255,6 @@
       transform: scale(0.96);
     }
 
-    /* Style demandé : Recommencer (Noir, Radius 8) */
     #restart-button {
       background: #000000;
       color: #ffffff;
@@ -265,7 +262,6 @@
       border: 1px solid rgba(255, 255, 255, 0.15);
     }
 
-    /* Style demandé : Suivant (Blanc, Radius 8) */
     #next-button {
       background: #ffffff;
       color: #000000;
@@ -276,13 +272,13 @@
     #upload-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.85); /* Fond plus sombre pour bien voir */
+      background: rgba(0, 0, 0, 0.85);
       display: flex;
       align-items: center;
       justify-content: center;
       color: #fff;
       font-size: 17px;
-      z-index: 200; /* Très haut pour passer au dessus de tout */
+      z-index: 200;
       opacity: 0;
       pointer-events: none;
       transition: opacity 0.2s ease;
@@ -305,10 +301,7 @@
       min-width: 200px;
     }
 
-    /* Input caché */
-    input[type="file"] {
-      display: none;
-    }
+    input[type="file"] { display: none; }
 
     .hint {
       position: absolute;
@@ -322,7 +315,6 @@
     }
     .hint.hidden { opacity: 0; }
 
-    /* Cacher les contrôles quand preview est active */
     body.showing-preview .controls { display: none !important; }
   </style>
 </head>
@@ -385,7 +377,6 @@
   </div>
 
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
-  
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
@@ -415,6 +406,10 @@
     let recordingStart = null;
     let recordingProgressRAF = null;
     let recordingProgressActive = false;
+    
+    // CORRECTION 1: Variable d'état explicite pour éviter le bug de double enregistrement
+    let isRecording = false; 
+
     const progressCircumference = 2 * Math.PI * 46;
     let facingMode = 'environment';
     let torchSupported = false;
@@ -570,12 +565,11 @@
     }
 
     async function startRecording() {
+      // Sécurité : ne jamais démarrer si déjà en cours
+      if (isRecording) return;
+      
       await ensureCameraStarted();
       if (!mediaStream) return;
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        stopRecording();
-        return;
-      }
 
       recordedBlob = null;
       recordedChunks = [];
@@ -604,12 +598,16 @@
         }
         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' });
         mediaRecorder = null;
+        isRecording = false; // Reset flag
+        
         if (recordedBlob && recordedBlob.size > 0) {
           showPreview(recordedBlob);
         }
       };
 
       mediaRecorder.start();
+      isRecording = true; // Set flag
+      
       recordButton.classList.add('recording');
       setRecordingUI(true);
       setAudioEnabled(true);
@@ -618,12 +616,18 @@
     }
 
     function stopRecording() {
+      // Sécurité : si pas en cours, ne rien faire
+      if (!isRecording) return;
+
       if (recordingTimeout) {
         clearTimeout(recordingTimeout);
         recordingTimeout = null;
       }
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
+        // isRecording sera mis à false dans le callback onstop
+      } else {
+        isRecording = false;
       }
     }
 
@@ -673,33 +677,46 @@
     }
 
     function setUploadURL(url) {
-      if (url) uploadURL = url;
+      if (url) {
+        uploadURL = url;
+        console.log("Upload URL set:", url);
+      }
     }
 
+    // CORRECTION 3: Recherche améliorée de l'URL
     function getUploadURL() {
       const params = new URLSearchParams(window.location.search);
-      return uploadURL || params.get('upload_url') || params.get('uploadUrl');
+      let url = uploadURL || params.get('upload_url') || params.get('uploadUrl') || params.get('url');
+      
+      // Essayer de lire depuis l'attribut src de l'iframe si accessible (Bubble specifique)
+      if (!url) {
+         try {
+           const frameParams = new URLSearchParams(window.frameElement?.src?.split('?')[1]);
+           url = frameParams.get('upload_url') || frameParams.get('url');
+         } catch(e) {}
+      }
+      return url;
     }
 
     function uploadToMux() {
       if (!recordedBlob) return;
       const url = getUploadURL();
       
-      // Affichage immédiat de l'overlay même si pas d'URL encore
       uploadOverlay.classList.add('active');
       uploadText.textContent = 'Préparation...';
 
       if (!url) {
         uploadText.textContent = 'Erreur: URL manquante';
         notifyHost({ status: 'error', message: 'Missing upload_url' });
-        setTimeout(() => uploadOverlay.classList.remove('active'), 2000);
+        // Log pour debug dans la console du téléphone si branché
+        console.error("Upload URL is empty. Please ensure it is passed in query params or set via setUploadURL()");
+        setTimeout(() => uploadOverlay.classList.remove('active'), 2500);
         return;
       }
       
       const xhr = new XMLHttpRequest();
       xhr.open('PUT', url, true);
       
-      // Gestion du pourcentage
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const pct = Math.round((event.loaded / event.total) * 100);
@@ -712,7 +729,6 @@
             uploadText.textContent = 'Terminé !';
             const assetId = extractAssetId(url);
             notifyHost({ status: 'ok', asset_id: assetId });
-            // On laisse affiché un instant
             setTimeout(() => uploadOverlay.classList.remove('active'), 1000);
         } else {
             uploadText.textContent = 'Erreur téléchargement';
@@ -739,9 +755,21 @@
       galleryPicker.value = '';
     }
 
+    // CORRECTION 4: Fonction pour couper le son et la caméra quand on quitte la page
+    function cleanup() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+    }
+
     function setupListeners() {
+      // Logique simple et robuste pour le bouton
       recordButton.addEventListener('click', () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
+        if (isRecording) {
           stopRecording();
         } else {
           startRecording();
@@ -777,12 +805,21 @@
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
-      // Init URL si présente dans les params
       const qUrl = getUploadURL();
       if(qUrl) setUploadURL(qUrl);
       
       setupListeners();
       await ensureCameraStarted();
+    });
+    
+    // Cleanup listeners (pour éviter le bruit du micro quand on change de page)
+    window.addEventListener('beforeunload', cleanup);
+    window.addEventListener('pagehide', cleanup);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        // Optionnel : arrêter la caméra si l'app passe en background
+        // cleanup(); 
+      }
     });
     
     window.cameraModule = {
