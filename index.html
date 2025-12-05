@@ -422,6 +422,7 @@
     const nextButton = document.getElementById('next-button');
     const resumeButton = document.getElementById('resume-button');
     const playPauseButton = document.getElementById('play-pause-button');
+    const previewActions = document.getElementById('preview-actions');
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
     const recordWrap = document.querySelector('.record-wrap');
@@ -678,6 +679,13 @@
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
       }
+      resetProgressRing();
+      recordButton.classList.remove('recording');
+      setRecordingUI(false);
+      if (recordingTimeout) {
+        clearTimeout(recordingTimeout);
+        recordingTimeout = null;
+      }
       setAudioEnabled(false);
       if (facingMode === 'environment' && torchSupported) {
         applyTorch(false);
@@ -694,6 +702,7 @@
       previewVideo.play();
       updatePlayPauseIcon();
       previewOverlay.classList.add('active');
+      previewActions?.classList.remove('hidden');
       pauseCameraStream();
       hint.textContent = '';
       hint.classList.add('hidden');
