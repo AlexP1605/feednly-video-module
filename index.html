@@ -33,8 +33,8 @@
   </style>
 </head>
 <body>
-  <input id="fileInput" type="file" accept="video/*" capture="camera" />
-  <div id="status">Initializing camera capture…</div>
+  <input id="fileInput" type="file" accept="video/*" />
+  <div id="status">Awaiting upload URL…</div>
 
   <script>
     (function () {
@@ -74,7 +74,7 @@
       function configureInputForMode() {
         fileInput.setAttribute("accept", "video/*");
         if (mode === "camera") {
-          fileInput.setAttribute("capture", "environment");
+          fileInput.setAttribute("capture", "camera");
         } else {
           fileInput.removeAttribute("capture");
         }
@@ -82,11 +82,12 @@
 
       function openPicker() {
         if (!uploadURL) {
-          setStatus("Waiting for upload URL…");
+          setStatus("Upload URL not provided");
           return;
         }
         configureInputForMode();
-        setTimeout(() => fileInput.click(), 50);
+        fileInput.value = "";
+        fileInput.click();
       }
 
       function handleError(message) {
@@ -129,11 +130,7 @@
       fileInput.addEventListener("change", (event) => {
         const file = event.target.files && event.target.files[0];
         if (!file) {
-          setStatus(
-            mode === "gallery"
-              ? "No file selected. Reopening gallery…"
-              : "No file selected. Reopening camera…"
-          );
+          setStatus(mode === "gallery" ? "No file selected. Reopening gallery…" : "No file selected. Reopening camera…");
           openPicker();
           return;
         }
@@ -159,9 +156,7 @@
           setStatus("Upload URL not provided");
           return;
         }
-        setStatus(
-          mode === "gallery" ? "Opening gallery…" : "Opening camera…"
-        );
+        setStatus(mode === "gallery" ? "Opening video gallery…" : "Opening video camera…");
         openPicker();
       }
 
@@ -170,10 +165,7 @@
       document.addEventListener("DOMContentLoaded", () => {
         initFromQuery();
         if (uploadURL) {
-          setStatus(
-            mode === "gallery" ? "Opening gallery…" : "Opening camera…"
-          );
-          openPicker();
+          setStatus("Ready. Call feednlyStart('camera'|'gallery', uploadURL) to begin.");
         } else {
           setStatus("Awaiting upload URL…");
         }
