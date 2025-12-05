@@ -834,7 +834,6 @@
 
       // --- FIX ICI ---
       document.body.classList.add('showing-preview');
-      document.querySelector('.controls').style.display = "none";
       // ---------------
 
       previewOverlay.classList.add('active');
@@ -865,7 +864,6 @@
       hint.classList.add('hidden');
 
       document.body.classList.remove('showing-preview');
-      document.querySelector('.controls').style.display = ""; // <- FIX
     }
 
     async function resumeRecording() {
