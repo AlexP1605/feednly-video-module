@@ -615,6 +615,8 @@
       if (!cameraPreview.srcObject) {
         cameraPreview.srcObject = mediaStream;
       }
+      cameraPreview.style.display = 'block';
+      cameraPreview.style.visibility = 'visible';
       try {
         await cameraPreview.play();
       } catch (error) {
@@ -671,6 +673,10 @@
       if (previewOverlay.classList.contains('active')) {
         hidePreview();
       }
+
+      hideRecordedPreview();
+      cameraPreview.style.display = 'block';
+      cameraPreview.style.visibility = 'visible';
 
       recordedBlob = null;
       hint.textContent = '';
@@ -758,11 +764,33 @@
       }
     }
 
+    function hideRecordedPreview() {
+      recordedPreview.pause();
+      recordedPreview.removeAttribute('src');
+      recordedPreview.load();
+      recordedPreview.style.display = 'none';
+    }
+
+    function showRecordedPreview(url) {
+      hideRecordedPreview();
+      recordedPreview.src = url;
+      recordedPreview.loop = true;
+      recordedPreview.muted = true;
+      recordedPreview.currentTime = 0;
+      recordedPreview.style.display = 'block';
+      const playPromise = recordedPreview.play();
+      if (playPromise && playPromise.catch) {
+        playPromise.catch((error) => console.warn('Recorded preview playback failed', error));
+      }
+      cameraPreview.style.display = 'none';
+    }
+
     async function showPreview(blob) {
       cleanupPreviewURL();
       const url = URL.createObjectURL(blob);
       previewObjectURL = url;
       recordedBlob = blob;
+      showRecordedPreview(url);
       previewVideo.src = url;
       previewVideo.controls = false;
       previewVideo.loop = true;
@@ -774,7 +802,6 @@
         previewVideo.controls = true;
       }
       updatePlayPauseIcon();
-      cameraPreview.style.visibility = 'hidden';
 
       previewOverlay.classList.add('active');
       if (previewActions) {
@@ -793,6 +820,8 @@
       previewVideo.removeAttribute('src');
       previewVideo.load();
       cleanupPreviewURL();
+      hideRecordedPreview();
+      cameraPreview.style.display = 'block';
       cameraPreview.style.visibility = 'visible';
       recordedBlob = null;
       hint.textContent = '';
@@ -874,6 +903,7 @@
         mediaStream.getTracks().forEach((track) => track.stop());
         mediaStream = null;
       }
+      hideRecordedPreview();
       hidePreview();
     }
 
