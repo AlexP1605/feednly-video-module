@@ -434,7 +434,7 @@
     let recordingTimeout = null;
     let recordingStart = null;
     let recordingProgressRAF = null;
-    let isStartingRecording = false;
+    let recordingProgressActive = false;
     const progressCircumference = 2 * Math.PI * 46;
     let facingMode = 'environment';
     let torchSupported = false;
@@ -580,12 +580,22 @@
       cameraPreview.pause();
     }
 
-    function resumeCameraStream() {
+    async function resumeCameraStream() {
+      if (!mediaStream) {
+        await ensureCameraStarted();
+      }
       if (!mediaStream) return;
       mediaStream.getTracks().forEach((track) => {
         track.enabled = true;
       });
-      cameraPreview.play();
+      if (!cameraPreview.srcObject) {
+        cameraPreview.srcObject = mediaStream;
+      }
+      try {
+        await cameraPreview.play();
+      } catch (error) {
+        console.warn('Resume preview failed', error);
+      }
     }
 
     function setRecordingUI(active) {
@@ -594,6 +604,7 @@
     }
 
     function resetProgressRing() {
+      recordingProgressActive = false;
       recordProgressCircle.style.strokeDashoffset = `${progressCircumference}`;
       if (recordingProgressRAF) {
         cancelAnimationFrame(recordingProgressRAF);
@@ -605,13 +616,19 @@
     function startProgressRing() {
       resetProgressRing();
       recordingStart = performance.now();
+      recordingProgressActive = true;
 
       const updateProgress = () => {
-        if (!recordingStart) return;
+        if (!recordingProgressActive || !recordingStart) return;
         const elapsed = Math.min(performance.now() - recordingStart, MAX_DURATION);
         const progress = Math.min(elapsed / MAX_DURATION, 1);
         recordProgressCircle.style.strokeDashoffset = `${progressCircumference * (1 - progress)}`;
-        if (progress < 1 && mediaRecorder && mediaRecorder.state === 'recording') {
+        if (
+          progress < 1 &&
+          recordingProgressActive &&
+          mediaRecorder &&
+          mediaRecorder.state === 'recording'
+        ) {
           recordingProgressRAF = requestAnimationFrame(updateProgress);
         }
       };
@@ -620,16 +637,17 @@
     }
 
     async function startRecording() {
-      if (!mediaStream) {
-        await ensureCameraStarted();
-      }
+      await ensureCameraStarted();
       if (!mediaStream) return;
-      if (isStartingRecording) return;
-      if (mediaRecorder && mediaRecorder.state === 'recording') return;
-      isStartingRecording = true;
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecording();
+        return;
+      }
+
       if (previewOverlay.classList.contains('active')) {
         hidePreview();
       }
+
       recordedBlob = null;
       hint.classList.remove('hidden');
       hint.textContent = 'Recording…';
@@ -640,7 +658,6 @@
       } catch (error) {
         console.error('MediaRecorder init failed', error);
         notifyHost({ status: 'error', message: 'Recording not supported' });
-        isStartingRecording = false;
         return;
       }
 
@@ -650,20 +667,30 @@
         }
       };
 
+      mediaRecorder.onerror = (event) => {
+        console.error('Recording error', event.error || event);
+        notifyHost({ status: 'error', message: event.error?.message || 'Recording error' });
+        stopRecording();
+      };
+
       mediaRecorder.onstop = () => {
-        recordButton.classList.remove('recording');
-        setAudioEnabled(false);
-        setRecordingUI(false);
         resetProgressRing();
         if (recordingTimeout) {
           clearTimeout(recordingTimeout);
           recordingTimeout = null;
         }
+        setRecordingUI(false);
+        recordButton.classList.remove('recording');
+        setAudioEnabled(false);
+        if (facingMode === 'environment' && torchSupported) {
+          applyTorch(false);
+        }
+
         recordedBlob = recordedChunks.length
           ? new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'video/webm' })
           : null;
         mediaRecorder = null;
-        isStartingRecording = false;
+
         if (recordedBlob) {
           showPreview(recordedBlob);
         } else {
@@ -672,32 +699,31 @@
         }
       };
 
-      mediaRecorder.start(1000);
+      mediaRecorder.start();
       recordButton.classList.add('recording');
       setRecordingUI(true);
-      recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
       setAudioEnabled(true);
       startProgressRing();
-      isStartingRecording = false;
+      recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
     }
 
     function stopRecording() {
-      if (isStartingRecording) {
-        return;
-      }
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-      }
+      recordingProgressActive = false;
       resetProgressRing();
-      recordButton.classList.remove('recording');
-      setRecordingUI(false);
       if (recordingTimeout) {
         clearTimeout(recordingTimeout);
         recordingTimeout = null;
       }
+
+      setRecordingUI(false);
+      recordButton.classList.remove('recording');
       setAudioEnabled(false);
       if (facingMode === 'environment' && torchSupported) {
         applyTorch(false);
+      }
+
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
       }
     }
 
@@ -711,7 +737,11 @@
       previewVideo.play();
       updatePlayPauseIcon();
       previewOverlay.classList.add('active');
-      previewActions?.classList.remove('hidden');
+      if (previewActions) {
+        previewActions.classList.remove('hidden');
+        previewActions.style.display = 'flex';
+        previewActions.style.pointerEvents = 'auto';
+      }
       pauseCameraStream();
       hint.textContent = '';
       hint.classList.add('hidden');
