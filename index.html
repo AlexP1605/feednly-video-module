@@ -432,6 +432,7 @@
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
+    const recordedPreview = document.getElementById('recorded-preview');
     const recordButton = document.getElementById('record-btn');
     const flashButton = document.getElementById('flash-btn');
     const switchButton = document.getElementById('switch-btn');
@@ -758,6 +759,15 @@
       previewVideo.currentTime = 0;
       previewVideo.play();
       updatePlayPauseIcon();
+
+      recordedPreview.src = url;
+      recordedPreview.style.display = 'block';
+      recordedPreview.currentTime = 0;
+      recordedPreview.loop = true;
+      recordedPreview.muted = true;
+      recordedPreview.play();
+      cameraPreview.style.display = 'none';
+
       previewOverlay.classList.add('active');
       if (previewActions) {
         previewActions.classList.remove('hidden');
@@ -774,6 +784,11 @@
       previewVideo.pause();
       previewVideo.removeAttribute('src');
       previewVideo.load();
+      recordedPreview.pause();
+      recordedPreview.removeAttribute('src');
+      recordedPreview.load();
+      recordedPreview.style.display = 'none';
+      cameraPreview.style.display = 'block';
       recordedBlob = null;
       hint.textContent = '';
       hint.classList.add('hidden');
