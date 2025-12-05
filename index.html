@@ -41,6 +41,7 @@
       const fileInput = document.getElementById("fileInput");
       const statusEl = document.getElementById("status");
       let uploadURL = "";
+      let mode = "camera";
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -70,11 +71,21 @@
         }
       }
 
-      function openCamera() {
+      function configureInputForMode() {
+        fileInput.setAttribute("accept", "video/*");
+        if (mode === "camera") {
+          fileInput.setAttribute("capture", "environment");
+        } else {
+          fileInput.removeAttribute("capture");
+        }
+      }
+
+      function openPicker() {
         if (!uploadURL) {
           setStatus("Waiting for upload URL…");
           return;
         }
+        configureInputForMode();
         setTimeout(() => fileInput.click(), 50);
       }
 
@@ -118,8 +129,12 @@
       fileInput.addEventListener("change", (event) => {
         const file = event.target.files && event.target.files[0];
         if (!file) {
-          setStatus("No file selected. Reopening camera…");
-          openCamera();
+          setStatus(
+            mode === "gallery"
+              ? "No file selected. Reopening gallery…"
+              : "No file selected. Reopening camera…"
+          );
+          openPicker();
           return;
         }
         setStatus("Video selected. Uploading…");
@@ -134,7 +149,8 @@
         }
       }
 
-      function start(mode = "camera", url = "") {
+      function start(selectedMode = "camera", url = "") {
+        mode = selectedMode === "gallery" ? "gallery" : "camera";
         if (url) {
           uploadURL = url;
         }
@@ -143,8 +159,10 @@
           setStatus("Upload URL not provided");
           return;
         }
-        setStatus("Opening camera…");
-        openCamera();
+        setStatus(
+          mode === "gallery" ? "Opening gallery…" : "Opening camera…"
+        );
+        openPicker();
       }
 
       window.feednlyStart = start;
@@ -152,8 +170,10 @@
       document.addEventListener("DOMContentLoaded", () => {
         initFromQuery();
         if (uploadURL) {
-          setStatus("Opening camera…");
-          openCamera();
+          setStatus(
+            mode === "gallery" ? "Opening gallery…" : "Opening camera…"
+          );
+          openPicker();
         } else {
           setStatus("Awaiting upload URL…");
         }
