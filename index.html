@@ -808,47 +808,56 @@
       const url = URL.createObjectURL(blob);
       previewObjectURL = url;
       recordedBlob = blob;
+
       showRecordedPreview(url);
+
       previewVideo.src = url;
       previewVideo.controls = false;
       previewVideo.loop = true;
       previewVideo.currentTime = 0;
+
       try {
         await previewVideo.play();
       } catch (error) {
-        console.warn('Preview autoplay failed, enabling controls', error);
         previewVideo.controls = true;
       }
+
       updatePlayPauseIcon();
 
-      previewOverlay.classList.add('active');
+      // --- FIX ICI ---
       document.body.classList.add('showing-preview');
+      document.querySelector('.controls').style.display = "none";
+      // ---------------
+
+      previewOverlay.classList.add('active');
+
       if (previewActions) {
-        previewActions.classList.remove('hidden');
         previewActions.style.display = 'flex';
         previewActions.style.pointerEvents = 'auto';
       }
+
       pauseCameraStream();
-      hint.textContent = '';
       hint.classList.add('hidden');
     }
 
     function hidePreview() {
       previewOverlay.classList.remove('active');
+
       previewVideo.pause();
       previewVideo.removeAttribute('src');
       previewVideo.load();
+
       cleanupPreviewURL();
       hideRecordedPreview();
+
       cameraPreview.style.display = 'block';
       cameraPreview.style.visibility = 'visible';
+
       recordedBlob = null;
-      hint.textContent = '';
       hint.classList.add('hidden');
-      recordButton.classList.remove('recording');
-      setAudioEnabled(false);
-      resumeCameraStream();
+
       document.body.classList.remove('showing-preview');
+      document.querySelector('.controls').style.display = ""; // <- FIX
     }
 
     async function resumeRecording() {
