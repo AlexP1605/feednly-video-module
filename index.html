@@ -298,7 +298,16 @@
     }
 
     input[type="file"] {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+      opacity: 0;
     }
 
     .hint {
@@ -362,7 +371,7 @@
   </div>
 
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
-  <input type="file" id="galleryInput" accept="video/*" style="display: none" />
+  <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
@@ -614,16 +623,16 @@
 
     function hidePreview() {
       previewOverlay.classList.remove('active');
-        previewVideo.pause();
-        previewVideo.removeAttribute('src');
-        previewVideo.load();
-        recordedBlob = null;
-        hint.textContent = '';
-        hint.classList.add('hidden');
-        recordButton.classList.remove('recording');
-        setAudioEnabled(false);
-        resumeCameraStream();
-      }
+      previewVideo.pause();
+      previewVideo.removeAttribute('src');
+      previewVideo.load();
+      recordedBlob = null;
+      hint.textContent = '';
+      hint.classList.add('hidden');
+      recordButton.classList.remove('recording');
+      setAudioEnabled(false);
+      resumeCameraStream();
+    }
 
     async function resumeRecording() {
       hidePreview();
@@ -760,6 +769,7 @@
     document.addEventListener('DOMContentLoaded', async () => {
       initUploadURLFromQuery();
       setupListeners();
+      await ensureCameraStarted();
     });
 
     window.feednlyStop = feednlyStop;
