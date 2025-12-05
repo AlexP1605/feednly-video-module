@@ -128,17 +128,33 @@
 
     .record-wrap {
       position: relative;
-      width: 82px;
-      height: 82px;
+      width: 94px;
+      height: 94px;
       display: flex;
       align-items: center;
       justify-content: center;
       pointer-events: auto;
     }
 
-    .progress-ring {
+    .record-outline {
       position: absolute;
       inset: 0;
+      border-radius: 999px;
+      background: #fff;
+      pointer-events: none;
+      box-shadow: 0 14px 32px rgba(255, 255, 255, 0.35), inset 0 8px 16px rgba(0, 0, 0, 0.28);
+      transform: scale(1);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .record-wrap.recording .record-outline {
+      transform: scale(1.04);
+      box-shadow: 0 18px 38px rgba(255, 255, 255, 0.45), inset 0 10px 18px rgba(0, 0, 0, 0.32);
+    }
+
+    .progress-ring {
+      position: absolute;
+      inset: 6px;
       border-radius: 50%;
       background: conic-gradient(var(--accent) 0deg, rgba(255, 255, 255, 0.08) 0deg);
       transform: rotate(-90deg);
@@ -164,11 +180,11 @@
     }
 
     .record-button {
-      width: 72px;
-      height: 72px;
+      width: 78px;
+      height: 78px;
       border-radius: 50%;
-      background: #fff;
-      border: 4px solid rgba(255, 255, 255, 0.35);
+      background: #ff4747;
+      border: 6px solid #fff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -178,7 +194,7 @@
 
     .record-button.recording {
       background: var(--danger);
-      border-color: rgba(255, 255, 255, 0.55);
+      border-color: #ffecec;
       animation: pulse 1.2s infinite;
     }
 
@@ -206,7 +222,7 @@
     #preview-overlay {
       position: fixed;
       inset: 0;
-      background: #000;
+      background: radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.08), transparent 48%), #000;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -238,6 +254,11 @@
       transform: translateX(-50%);
       display: flex;
       gap: 14px;
+      padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
     }
 
     #preview-actions button {
@@ -256,13 +277,13 @@
     }
 
     #resume-button {
-      background: #2b2d33;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      color: #b8bcc8;
+      background: #f6f6f6;
+      color: #111;
+      border: 1px solid rgba(0, 0, 0, 0.08);
     }
 
     #next-button {
-      background: #050505;
+      background: linear-gradient(180deg, #121212, #050505);
       color: #fff;
       border: 1px solid rgba(255, 255, 255, 0.18);
       box-shadow: 0 18px 36px rgba(0, 0, 0, 0.5);
@@ -349,6 +370,7 @@
             <button class="btn" id="gallery-btn" aria-label="Gallery">🖼️</button>
           </div>
           <div class="record-wrap">
+            <div class="record-outline"></div>
             <div class="progress-ring" id="progress-ring"></div>
             <div class="record-button" id="record-btn" aria-label="Record">
               <div class="record-inner"></div>
@@ -410,6 +432,13 @@
     let recordedBlob = null;
 
     const MAX_DURATION = 60_000; // 60 seconds
+
+    function setAudioEnabled(active) {
+      if (!mediaStream) return;
+      mediaStream.getAudioTracks().forEach((track) => {
+        track.enabled = !!active;
+      });
+    }
 
     function notifyHost(payload) {
       try {
@@ -483,6 +512,7 @@
           await applyTorch(false);
           cameraPreview.srcObject = mediaStream;
           await cameraPreview.play();
+          setAudioEnabled(false);
           if (previousStream) {
             previousStream.getTracks().forEach((t) => t.stop());
           }
@@ -571,6 +601,7 @@
       mediaRecorder.onstop = () => {
         resetProgress();
         recordButton.classList.remove('recording');
+        setAudioEnabled(false);
         if (recordingTimeout) {
           clearTimeout(recordingTimeout);
           recordingTimeout = null;
@@ -579,6 +610,9 @@
         mediaRecorder = null;
         if (recordedBlob) {
           showPreview(recordedBlob);
+        } else {
+          hint.textContent = 'Tap to record up to 60s';
+          hint.classList.remove('hidden');
         }
       };
 
@@ -586,6 +620,7 @@
       recordButton.classList.add('recording');
       startProgress();
       recordingTimeout = setTimeout(() => stopRecording(), MAX_DURATION);
+      setAudioEnabled(true);
       if (facingMode === 'environment' && torchSupported) {
         applyTorch(true);
       }
@@ -595,6 +630,7 @@
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
       }
+      setAudioEnabled(false);
       if (facingMode === 'environment' && torchSupported) {
         applyTorch(false);
       }
@@ -623,6 +659,9 @@
         recordedBlob = null;
         hint.textContent = 'Tap to record up to 60s';
         hint.classList.remove('hidden');
+        recordButton.classList.remove('recording');
+        resetProgress();
+        setAudioEnabled(false);
         cameraPreview.play();
       }
 
@@ -710,9 +749,9 @@
       });
       previewVideo.addEventListener('play', updatePlayPauseIcon);
       previewVideo.addEventListener('pause', updatePlayPauseIcon);
-        previewOverlay.addEventListener('click', (e) => {
-          if (e.target === previewOverlay) {
-            hidePreview();
+      previewOverlay.addEventListener('click', (e) => {
+        if (e.target === previewOverlay) {
+          hidePreview();
         }
       });
     }
