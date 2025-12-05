@@ -61,6 +61,8 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
+      /* Ajout d'une transition pour que la disparition soit fluide si l'opacité est utilisée */
+      transition: opacity 0.2s ease;
     }
 
     .top-bar,
@@ -237,6 +239,7 @@
       pointer-events: auto;
     }
 
+    /* Styles activés quand la preview est montrée */
     body.showing-preview #recorded-preview {
       position: absolute;
       inset: 0;
@@ -252,6 +255,7 @@
       justify-content: center;
     }
 
+    /* C'est ici que la magie opère pour cacher les contrôles */
     body.showing-preview .controls,
     body.showing-preview #camera-preview {
       opacity: 0;
@@ -387,12 +391,12 @@
       opacity: 0;
     }
 
-    /* Hide capture controls while reviewing a recording */
+    /* Ces règles forcent la disparition des boutons spécifiques */
     body.showing-preview #flash-btn,
     body.showing-preview #switch-btn,
     body.showing-preview #gallery-btn,
     body.showing-preview .record-wrap {
-      display: none;
+      display: none !important; /* Ajout de !important pour sécurité */
     }
   </style>
 </head>
@@ -539,7 +543,8 @@
     function updatePlayPauseIcon() {
       const isPaused = previewVideo.paused;
       const icon = playPauseButton.querySelector('.ph');
-      icon.className = `ph-bold ${isPaused ? 'ph-play' : 'ph-pause'}`;
+      // Fix si l'icône n'est pas encore chargée
+      if(icon) icon.className = `ph-bold ${isPaused ? 'ph-play' : 'ph-pause'}`;
     }
 
     async function applyTorch(active) {
@@ -811,7 +816,22 @@
       cameraPreview.style.display = 'none';
     }
 
+    // --- CORRECTION MAJEURE ICI ---
     async function showPreview(blob) {
+      // 1. On cache l'interface de caméra TOUT DE SUITE
+      document.body.classList.add('showing-preview');
+      previewOverlay.classList.add('active');
+      
+      // On s'assure que les actions sont clickables
+      if (previewActions) {
+        previewActions.style.display = 'flex';
+        previewActions.style.pointerEvents = 'auto';
+      }
+      
+      pauseCameraStream();
+      hint.classList.add('hidden');
+
+      // 2. Ensuite on gère la vidéo
       cleanupPreviewURL();
       const url = URL.createObjectURL(blob);
       previewObjectURL = url;
@@ -828,27 +848,16 @@
         await previewVideo.play();
       } catch (error) {
         previewVideo.controls = true;
+        console.warn('Auto-play prevent', error);
       }
 
       updatePlayPauseIcon();
-
-      // --- FIX ICI ---
-      document.body.classList.add('showing-preview');
-      // ---------------
-
-      previewOverlay.classList.add('active');
-
-      if (previewActions) {
-        previewActions.style.display = 'flex';
-        previewActions.style.pointerEvents = 'auto';
-      }
-
-      pauseCameraStream();
-      hint.classList.add('hidden');
     }
+    // -----------------------------
 
     function hidePreview() {
       previewOverlay.classList.remove('active');
+      document.body.classList.remove('showing-preview'); // Rétablissement des contrôles
 
       previewVideo.pause();
       previewVideo.removeAttribute('src');
@@ -862,8 +871,6 @@
 
       recordedBlob = null;
       hint.classList.add('hidden');
-
-      document.body.classList.remove('showing-preview');
     }
 
     async function resumeRecording() {
