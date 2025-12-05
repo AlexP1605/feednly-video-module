@@ -42,6 +42,7 @@
       const statusEl = document.getElementById("status");
       let uploadURL = "";
       let mode = "camera";
+      let pendingFile = null;
 
       function setStatus(text) {
         statusEl.textContent = text;
@@ -74,20 +75,24 @@
       function configureInputForMode() {
         fileInput.setAttribute("accept", "video/*");
         if (mode === "camera") {
-          fileInput.setAttribute("capture", "camera");
+          fileInput.setAttribute("capture", "environment");
         } else {
           fileInput.removeAttribute("capture");
         }
       }
 
       function openPicker() {
-        if (!uploadURL) {
-          setStatus("Upload URL not provided");
-          return;
-        }
         configureInputForMode();
         fileInput.value = "";
-        fileInput.click();
+        if (mode === "gallery" && typeof fileInput.showPicker === "function") {
+          fileInput
+            .showPicker()
+            .catch(() => {
+              fileInput.click();
+            });
+        } else {
+          fileInput.click();
+        }
       }
 
       function handleError(message) {
@@ -98,7 +103,9 @@
 
       function uploadFile(file) {
         if (!uploadURL) {
-          handleError("Upload URL missing");
+          pendingFile = file;
+          setStatus("Video ready. Waiting for upload URL…");
+          notifyHost({ status: "pending_upload_url" });
           return;
         }
         const xhr = new XMLHttpRequest();
@@ -134,7 +141,8 @@
           openPicker();
           return;
         }
-        setStatus("Video selected. Uploading…");
+        pendingFile = null;
+        setStatus(uploadURL ? "Video selected. Uploading…" : "Video selected. Waiting for upload URL…");
         uploadFile(file);
       });
 
@@ -146,21 +154,38 @@
         }
       }
 
-      function start(selectedMode = "camera", url = "") {
-        mode = selectedMode === "gallery" ? "gallery" : "camera";
+      function setUploadURL(url) {
         if (url) {
           uploadURL = url;
+          if (pendingFile) {
+            const fileToUpload = pendingFile;
+            pendingFile = null;
+            setStatus("Upload URL received. Uploading video…");
+            uploadFile(fileToUpload);
+          } else if (!statusEl.textContent.includes("Upload complete")) {
+            setStatus(mode === "gallery" ? "Gallery ready. Select a video." : "Camera ready. Record a video.");
+          }
         }
+      }
+
+      function start(selectedMode = "camera", url = "") {
+        mode = selectedMode === "gallery" ? "gallery" : "camera";
+        setUploadURL(url);
         initFromQuery();
-        if (!uploadURL) {
-          setStatus("Upload URL not provided");
-          return;
-        }
-        setStatus(mode === "gallery" ? "Opening video gallery…" : "Opening video camera…");
+        setStatus(
+          uploadURL
+            ? mode === "gallery"
+              ? "Opening video gallery…"
+              : "Opening video camera…"
+            : mode === "gallery"
+              ? "Opening gallery. Upload will start once a URL is provided…"
+              : "Opening camera. Upload will start once a URL is provided…"
+        );
         openPicker();
       }
 
       window.feednlyStart = start;
+      window.feednlySetUploadURL = setUploadURL;
 
       document.addEventListener("DOMContentLoaded", () => {
         initFromQuery();
