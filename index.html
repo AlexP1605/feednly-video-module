@@ -390,6 +390,7 @@
     let torchEnabled = false;
     let uploadURL = '';
     let recordedBlob = null;
+    let cameraStartPromise = null;
 
     const MAX_DURATION = 60_000; // 60 seconds
 
@@ -483,6 +484,19 @@
       }
     }
 
+    async function ensureCameraStarted() {
+      if (mediaStream) return;
+      if (cameraStartPromise) return cameraStartPromise;
+      cameraStartPromise = startCamera()
+        .catch((error) => {
+          console.error('Failed to initialize camera', error);
+        })
+        .finally(() => {
+          cameraStartPromise = null;
+        });
+      return cameraStartPromise;
+    }
+
     async function switchCamera() {
       facingMode = facingMode === 'environment' ? 'user' : 'environment';
       await startCamera();
@@ -520,7 +534,10 @@
       cameraPreview.play();
     }
 
-    function startRecording() {
+    async function startRecording() {
+      if (!mediaStream) {
+        await ensureCameraStarted();
+      }
       if (!mediaStream) return;
       if (mediaRecorder && mediaRecorder.state === 'recording') return;
       if (previewOverlay.classList.contains('active')) {
@@ -608,9 +625,9 @@
         resumeCameraStream();
       }
 
-    function resumeRecording() {
+    async function resumeRecording() {
       hidePreview();
-      startRecording();
+      await startRecording();
     }
 
     function setUploadURL(url) {
@@ -684,19 +701,24 @@
     }
 
     function setupListeners() {
-      recordButton.addEventListener('click', () => {
+      recordButton.addEventListener('click', async () => {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
           stopRecording();
         } else {
-          startRecording();
+          await startRecording();
         }
       });
 
       flashButton.addEventListener('click', toggleFlash);
-      switchButton.addEventListener('click', switchCamera);
+      switchButton.addEventListener('click', async () => {
+        await ensureCameraStarted();
+        await switchCamera();
+      });
       galleryButton.addEventListener('click', feednlyOpenGallery);
       nextButton.addEventListener('click', uploadToMux);
-      resumeButton.addEventListener('click', resumeRecording);
+      resumeButton.addEventListener('click', () => {
+        resumeRecording();
+      });
       playPauseButton.addEventListener('click', () => {
         if (previewVideo.paused) {
           previewVideo.play();
@@ -738,7 +760,6 @@
     document.addEventListener('DOMContentLoaded', async () => {
       initUploadURLFromQuery();
       setupListeners();
-      await startCamera();
     });
 
     window.feednlyStop = feednlyStop;
