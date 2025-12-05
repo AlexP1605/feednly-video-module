@@ -38,7 +38,7 @@
 
   <script>
     (function () {
-      const fileInput = document.getElementById("fileInput");
+      let fileInput = document.getElementById("fileInput");
       const statusEl = document.getElementById("status");
       let uploadURL = "";
       let mode = "camera";
@@ -72,24 +72,32 @@
         }
       }
 
-      function configureInputForMode() {
-        fileInput.style.display = "none";
-        fileInput.setAttribute("accept", "video/*");
+      function recreateInput(forGallery = false) {
+        const old = document.getElementById("fileInput");
+        if (old) old.remove();
 
-        if (mode === "camera") {
-          fileInput.setAttribute("capture", "environment");
-          fileInput.capture = "environment";
-        } else {
-          // Gallery must never hint at the camera; clear capture entirely.
-          fileInput.removeAttribute("capture");
-          fileInput.capture = "";
+        const input = document.createElement("input");
+        input.id = "fileInput";
+        input.type = "file";
+        input.accept = "video/*";
+        input.style.display = "none";
+
+        if (!forGallery) {
+          input.setAttribute("capture", "environment");
+          input.capture = "environment";
         }
+
+        input.addEventListener("change", handleFileSelect);
+
+        document.body.appendChild(input);
+        fileInput = input;
+        return input;
       }
 
       function openPicker() {
-        configureInputForMode();
-        fileInput.value = "";
-        fileInput.click();
+        const input = recreateInput(mode === "gallery");
+        input.value = "";
+        input.click();
       }
 
       function handleError(message) {
@@ -131,7 +139,7 @@
         xhr.send(file);
       }
 
-      fileInput.addEventListener("change", (event) => {
+      function handleFileSelect(event) {
         const file = event.target.files && event.target.files[0];
         if (!file) {
           setStatus(mode === "gallery" ? "No file selected. Reopening gallery…" : "No file selected. Reopening camera…");
@@ -141,7 +149,7 @@
         pendingFile = null;
         setStatus(uploadURL ? "Video selected. Uploading…" : "Video selected. Waiting for upload URL…");
         uploadFile(file);
-      });
+      }
 
       function initFromQuery() {
         const params = new URLSearchParams(window.location.search);
@@ -186,6 +194,7 @@
 
       document.addEventListener("DOMContentLoaded", () => {
         initFromQuery();
+        recreateInput(true);
         if (uploadURL) {
           setStatus("Ready. Call feednlyStart('camera'|'gallery', uploadURL) to begin.");
         } else {
