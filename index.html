@@ -1,594 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Feednly Video Module</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f7f9fc;
-        --card: #ffffff;
-        --text: #1d1f23;
-        --muted: #6a707c;
-        --accent: #ff4d4f;
-        --accent-2: #4f46e5;
-        --border: #e5e7eb;
-        --shadow: 0 15px 40px rgba(17, 24, 39, 0.08);
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feednly Camera Uploader</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #fileInput {
+      display: none;
+    }
+    #status {
+      font-size: 14px;
+      color: #9db3c4;
+      text-align: center;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #151b23;
+      border: 1px solid #1f2630;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+      width: min(520px, 90vw);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <input id="fileInput" type="file" accept="video/*" capture="camera" />
+  <div id="status">Initializing camera capture…</div>
+
+  <script>
+    (function () {
+      const fileInput = document.getElementById("fileInput");
+      const statusEl = document.getElementById("status");
+      let uploadURL = "";
+
+      function setStatus(text) {
+        statusEl.textContent = text;
       }
 
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        margin: 0;
-        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-          sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-      }
-
-      .app {
-        width: 100%;
-        max-width: 520px;
-        background: var(--card);
-        border-radius: 18px;
-        box-shadow: var(--shadow);
-        padding: 20px 20px 28px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
-      .title {
-        font-size: 18px;
-        font-weight: 700;
-        margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .pill {
-        background: #eef2ff;
-        color: #4338ca;
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-      }
-
-      .preview {
-        position: relative;
-        background: linear-gradient(145deg, #f4f6fb, #e9ecf4);
-        border-radius: 14px;
-        border: 1px dashed var(--border);
-        overflow: hidden;
-        height: 260px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      video {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: none;
-      }
-
-      .placeholder {
-        text-align: center;
-        color: var(--muted);
-        font-size: 14px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .placeholder .dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: var(--accent-2);
-        animation: pulse 1.8s ease-in-out infinite;
-      }
-
-      .controls {
-        display: none;
-      }
-
-      button {
-        border: none;
-        cursor: pointer;
-        font-weight: 700;
-        transition: transform 180ms ease, box-shadow 180ms ease, opacity 150ms;
-      }
-
-      .status-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .loader {
-        width: 18px;
-        height: 18px;
-        border: 2px solid #e5e7eb;
-        border-top-color: var(--accent-2);
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-        display: none;
-      }
-
-      .progress {
-        height: 12px;
-        background: #f3f4f6;
-        border-radius: 999px;
-        overflow: hidden;
-        border: 1px solid var(--border);
-      }
-
-      .progress-fill {
-        height: 100%;
-        width: 0;
-        background: linear-gradient(90deg, var(--accent-2), #8b5cf6);
-        transition: width 150ms ease;
-      }
-
-      .upload-actions {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-
-      .mini-btn {
-        display: none;
-      }
-
-      .chip {
-        padding: 6px 10px;
-        background: #f3f4f6;
-        border-radius: 12px;
-        font-size: 12px;
-        color: var(--muted);
-      }
-
-      @keyframes pulse {
-        0% {
-          transform: scale(0.98);
-          opacity: 0.8;
-        }
-        50% {
-          transform: scale(1.02);
-          opacity: 1;
-        }
-        100% {
-          transform: scale(0.98);
-          opacity: 0.8;
-        }
-      }
-
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      @media (max-width: 600px) {
-        body {
-          padding: 12px;
-        }
-
-        .app {
-          padding: 16px;
-        }
-
-        .record-btn {
-          width: 78px;
-          height: 78px;
-        }
-      }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js" defer></script>
-  </head>
-  <body>
-    <main class="app">
-      <header>
-        <h1 class="title">
-          <span>Feednly Capture</span>
-          <span class="pill" id="modeLabel">Idle</span>
-        </h1>
-        <span class="chip">Bubble Mobile Ready</span>
-      </header>
-
-      <section class="preview">
-        <video id="preview" playsinline></video>
-        <div class="placeholder" id="placeholder">
-          <div class="dot"></div>
-          <span>Record or select a video to preview</span>
-        </div>
-      </section>
-
-      <div class="controls">
-        <button class="record-btn" id="recordBtn">Record</button>
-        <button class="gallery-btn" id="galleryBtn">Gallery</button>
-      </div>
-
-      <div class="upload-actions">
-        <div class="status-row">
-          <div class="loader" id="loader"></div>
-          <span id="status">Preparing autonomous capture...</span>
-        </div>
-        <button class="mini-btn" id="uploadBtn">Upload</button>
-      </div>
-
-      <div class="progress" aria-hidden="true">
-        <div class="progress-fill" id="progressFill"></div>
-      </div>
-
-      <input
-        type="file"
-        id="fileInput"
-        accept="video/*"
-        aria-hidden="true"
-        style="display: none"
-      />
-    </main>
-
-    <script>
-      function getUploadUrlFromQuery() {
-        const params = new URLSearchParams(window.location.search);
-        return params.get("upload_url") || "";
-      }
-
-      const elements = {
-        recordBtn: document.getElementById("recordBtn"),
-        galleryBtn: document.getElementById("galleryBtn"),
-        uploadBtn: document.getElementById("uploadBtn"),
-        preview: document.getElementById("preview"),
-        placeholder: document.getElementById("placeholder"),
-        fileInput: document.getElementById("fileInput"),
-        progressFill: document.getElementById("progressFill"),
-        status: document.getElementById("status"),
-        loader: document.getElementById("loader"),
-        modeLabel: document.getElementById("modeLabel"),
-      };
-
-      const state = {
-        mode: "idle",
-        uploadURL: "",
-        assetId: "",
-        recording: false,
-        mediaRecorder: null,
-        stream: null,
-        chunks: [],
-        currentBlob: null,
-        compressionEnabled: true,
-        autoStopTimer: null,
-      };
-
-      const THRESHOLD = 50 * 1024 * 1024;
-      const AUTO_STOP_MS = 15000;
-
-      function setStatus(message) {
-        elements.status.textContent = message;
-      }
-
-      function setModeLabel(mode) {
-        elements.modeLabel.textContent = mode;
-      }
-
-      function toggleLoader(active) {
-        elements.loader.style.display = active ? "block" : "none";
-      }
-
-      function showVideoPreview(blob) {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        elements.preview.srcObject = null;
-        elements.preview.src = url;
-        elements.preview.style.display = "block";
-        elements.placeholder.style.display = "none";
-        elements.preview.controls = true;
-        elements.preview.muted = false;
-        elements.preview.play().catch(() => {});
-      }
-
-      function resetProgress() {
-        elements.progressFill.style.width = "0%";
-      }
-
-      function updateProgress(value) {
-        elements.progressFill.style.width = `${Math.min(100, Math.max(0, value))}%`;
-      }
-
-      function extractAssetId(uploadURL) {
+      function notifyHost(payload) {
         try {
-          const url = new URL(uploadURL);
-          const byParam = url.searchParams.get("asset_id") || url.searchParams.get("upload_id");
-          if (byParam) return byParam;
-          const parts = url.pathname.split("/").filter(Boolean);
-          return parts[parts.length - 1] || "";
-        } catch (e) {
+          const message = JSON.stringify(payload);
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(message);
+          } else if (window.parent && window.parent !== window && window.parent.postMessage) {
+            window.parent.postMessage(message, "*");
+          }
+        } catch (error) {
+          console.error("postMessage failed", error);
+        }
+      }
+
+      function extractAssetId(url) {
+        try {
+          const { pathname } = new URL(url);
+          const segments = pathname.split("/").filter(Boolean);
+          return segments.length ? segments[segments.length - 1].split("?")[0] : "";
+        } catch (error) {
+          console.warn("Unable to parse asset id", error);
           return "";
         }
       }
 
-      function notifyParent(status = "ok", payload = {}) {
-        try {
-          if (window.ReactNativeWebView?.postMessage) {
-            window.ReactNativeWebView.postMessage(
-              JSON.stringify({ status, ...payload })
-            );
-          } else if (window.parent && window.parent !== window) {
-            window.parent.postMessage(
-              { source: "feednly-video-module", status, ...payload },
-              "*"
-            );
+      function openCamera() {
+        if (!uploadURL) {
+          setStatus("Waiting for upload URL…");
+          return;
+        }
+        setTimeout(() => fileInput.click(), 50);
+      }
+
+      function handleError(message) {
+        console.error(message);
+        setStatus(message);
+        notifyHost({ status: "error", error: message });
+      }
+
+      function uploadFile(file) {
+        if (!uploadURL) {
+          handleError("Upload URL missing");
+          return;
+        }
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadURL, true);
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            setStatus(`Uploading… ${percent}%`);
+          } else {
+            setStatus("Uploading…");
           }
-        } catch (e) {
-          console.warn("notifyParent failed", e);
-        }
-      }
-
-      async function ensureCamera() {
-        if (state.stream) return state.stream;
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-          state.stream = stream;
-          elements.preview.srcObject = stream;
-          elements.preview.muted = true;
-          elements.preview.controls = false;
-          elements.preview.style.display = "block";
-          elements.placeholder.style.display = "none";
-          await elements.preview.play();
-          return stream;
-        } catch (error) {
-          setStatus("Camera/mic permission denied");
-          console.error(error);
-          notifyParent("error", { reason: "permissions" });
-          return null;
-        }
-      }
-
-      function stopStream() {
-        if (state.stream) {
-          state.stream.getTracks().forEach((t) => t.stop());
-          state.stream = null;
-        }
-        elements.preview.srcObject = null;
-      }
-
-      async function startRecording() {
-        if (state.recording) return;
-        const stream = await ensureCamera();
-        if (!stream) return;
-        state.chunks = [];
-        state.mediaRecorder = new MediaRecorder(stream);
-        state.mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) state.chunks.push(event.data);
         };
-        state.mediaRecorder.onstop = handleRecordingStop;
-        state.mediaRecorder.start();
-        state.recording = true;
-        elements.recordBtn?.classList.add("recording");
-        if (elements.recordBtn) elements.recordBtn.textContent = "Stop";
-        setStatus("Recording automatically");
-        if (state.autoStopTimer) clearTimeout(state.autoStopTimer);
-        state.autoStopTimer = setTimeout(() => {
-          if (state.recording) stopRecording();
-        }, AUTO_STOP_MS);
-      }
-
-      function handleRecordingStop() {
-        state.recording = false;
-        if (state.autoStopTimer) {
-          clearTimeout(state.autoStopTimer);
-          state.autoStopTimer = null;
-        }
-        elements.recordBtn?.classList.remove("recording");
-        if (elements.recordBtn) elements.recordBtn.textContent = "Record";
-        stopStream();
-        const blob = new Blob(state.chunks, { type: "video/webm" });
-        state.currentBlob = blob;
-        showVideoPreview(blob);
-        setStatus("Recorded. Uploading...");
-        uploadVideo();
-      }
-
-      function stopRecording() {
-        if (state.mediaRecorder && state.recording) {
-          state.mediaRecorder.stop();
-        }
-      }
-
-      function autoSelectGallery() {
-        elements.fileInput.value = "";
-        elements.fileInput.click();
-      }
-
-      elements.recordBtn.addEventListener("click", () => {
-        if (state.recording) {
-          stopRecording();
-        } else {
-          state.mode = "camera";
-          setModeLabel("Camera");
-          startRecording();
-        }
-      });
-
-      elements.galleryBtn.addEventListener("click", () => {
-        state.mode = "gallery";
-        setModeLabel("Gallery");
-        autoSelectGallery();
-      });
-
-      elements.fileInput.addEventListener("change", (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        state.currentBlob = file;
-        setStatus("Video selected from gallery");
-        showVideoPreview(file);
-      });
-
-      async function compressIfNeeded(blob) {
-        if (!blob || blob.size <= THRESHOLD || !state.compressionEnabled) {
-          return { blob, usedCompression: false };
-        }
-        if (!window.FFmpeg || !window.createFFmpeg || !window.fetchFile) {
-          setStatus("Compression unavailable. Uploading original.");
-          return { blob, usedCompression: false };
-        }
-        setStatus("Compressing to 720p...");
-        toggleLoader(true);
-        try {
-          const ffmpeg = window.createFFmpeg({
-            log: false,
-            corePath:
-              "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/ffmpeg-core.js",
-          });
-          if (!ffmpeg.isLoaded()) {
-            await ffmpeg.load();
+        xhr.onload = function () {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const assetId = extractAssetId(uploadURL);
+            setStatus("Upload complete");
+            notifyHost({ status: "ok", asset_id: assetId });
+          } else {
+            handleError(`Upload failed (${xhr.status})`);
           }
-          const inputName = "input.mp4";
-          const outputName = "output.mp4";
-          ffmpeg.FS("writeFile", inputName, await window.fetchFile(blob));
-          await ffmpeg.run(
-            "-i",
-            inputName,
-            "-vf",
-            "scale=-2:720",
-            "-preset",
-            "veryfast",
-            "-c:v",
-            "libx264",
-            "-c:a",
-            "aac",
-            outputName
-          );
-          const data = ffmpeg.FS("readFile", outputName);
-          const compressedBlob = new Blob([data.buffer], { type: "video/mp4" });
-          ffmpeg.FS("unlink", inputName);
-          ffmpeg.FS("unlink", outputName);
-          setStatus("Compression complete");
-          return { blob: compressedBlob, usedCompression: true };
-        } catch (error) {
-          console.error("Compression failed", error);
-          setStatus("Compression failed. Uploading original.");
-          return { blob, usedCompression: false };
-        } finally {
-          toggleLoader(false);
-        }
+        };
+        xhr.onerror = function () {
+          handleError("Network error during upload");
+        };
+        xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+        xhr.send(file);
       }
 
-      async function uploadVideo() {
-        if (!state.uploadURL) {
-          setStatus("Upload URL missing");
+      fileInput.addEventListener("change", (event) => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) {
+          setStatus("No file selected. Reopening camera…");
+          openCamera();
           return;
         }
-        if (!state.currentBlob) {
-          setStatus("No video to upload");
+        setStatus("Video selected. Uploading…");
+        uploadFile(file);
+      });
+
+      function initFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const url = params.get("uploadURL") || params.get("uploadUrl") || params.get("upload_url");
+        if (url) {
+          uploadURL = url;
+        }
+      }
+
+      function start(mode = "camera", url = "") {
+        if (url) {
+          uploadURL = url;
+        }
+        initFromQuery();
+        if (!uploadURL) {
+          setStatus("Upload URL not provided");
           return;
         }
-        resetProgress();
-        toggleLoader(true);
-        setStatus("Preparing upload...");
-        const { blob } = await compressIfNeeded(state.currentBlob);
-        try {
-          setStatus("Uploading to Feednly...");
-          let progress = 5;
-          updateProgress(progress);
-          const progressTimer = setInterval(() => {
-            progress = Math.min(progress + Math.random() * 10, 92);
-            updateProgress(progress);
-          }, 450);
-          const response = await fetch(state.uploadURL, {
-            method: "PUT",
-            headers: { "Content-Type": blob.type || "video/mp4" },
-            body: blob,
-          });
-          clearInterval(progressTimer);
-          updateProgress(100);
-          if (!response.ok) {
-            throw new Error(`Upload failed: ${response.status}`);
-          }
-          state.assetId = extractAssetId(state.uploadURL);
-          setStatus("Upload complete");
-          notifyParent("ok", { assetId: state.assetId, uploadURL: state.uploadURL });
-        } catch (error) {
-          console.error(error);
-          setStatus("Upload error");
-        } finally {
-          toggleLoader(false);
-        }
+        setStatus("Opening camera…");
+        openCamera();
       }
 
-      elements.uploadBtn.addEventListener("click", uploadVideo);
+      window.feednlyStart = start;
 
-      function startAutonomousCapture() {
-        elements.recordBtn?.setAttribute("aria-hidden", "true");
-        elements.galleryBtn?.setAttribute("aria-hidden", "true");
-        elements.uploadBtn?.setAttribute("aria-hidden", "true");
-        setModeLabel("Camera");
-        state.mode = "camera";
-        if (!state.uploadURL) {
-          setStatus("Missing upload URL");
-          return;
-        }
-        setStatus("Initializing camera...");
-        startRecording();
-      }
-
-      function initializeUploadUrl() {
-        const uploadUrlFromQuery = getUploadUrlFromQuery();
-        if (uploadUrlFromQuery) {
-          state.uploadURL = uploadUrlFromQuery;
-          state.assetId = extractAssetId(uploadUrlFromQuery);
-          setStatus("Upload URL loaded");
-        } else {
-          setStatus("Waiting for upload URL...");
-        }
-      }
-
-      function feednlyStart(mode = "camera", uploadURL = "") {
+      document.addEventListener("DOMContentLoaded", () => {
+        initFromQuery();
         if (uploadURL) {
-          state.uploadURL = uploadURL;
-          state.assetId = extractAssetId(uploadURL);
+          setStatus("Opening camera…");
+          openCamera();
+        } else {
+          setStatus("Awaiting upload URL…");
         }
-        state.mode = mode;
-        setModeLabel(mode === "camera" ? "Camera" : mode);
-        startAutonomousCapture();
-      }
-
-      window.feednlyStart = feednlyStart;
-      window.feednlyStop = stopRecording;
-
-      setModeLabel("Camera");
-      initializeUploadUrl();
-      startAutonomousCapture();
-    </script>
-  </body>
+      });
+    })();
+  </script>
+</body>
 </html>
