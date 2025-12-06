@@ -349,7 +349,7 @@
       }, 1000);
     }
 
-    async function startCamera() {
+    async function startCamera(showErrors = true) {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
       // CONFIGURATION 1080P STRICTE (PAS DE 4K)
@@ -388,7 +388,10 @@
           updateFlashUI();
         }, 300);
 
-      } catch (error) { console.error(error); showError("Impossible d'accéder à la caméra."); }
+      } catch (error) {
+        console.error(error);
+        if (showErrors) showError("Impossible d'accéder à la caméra.");
+      }
     }
 
     // --- LOGIQUE BOUTON ROBUSTE ---
@@ -410,6 +413,10 @@
 
     async function startRecording() {
       if (!mediaStream || !mediaStream.active) await startCamera();
+      if (!mediaStream || !mediaStream.active) {
+        showError("Impossible d'accéder à la caméra.");
+        return;
+      }
       if (isRecording) return;
       
       recordedFacingMode = facingMode; 
@@ -555,7 +562,8 @@
       }
     };
 
-    startCamera();
+    // Tentative silencieuse pour éviter un message d'erreur avant l'interaction utilisateur.
+    startCamera(false);
 
   </script>
 </body>
