@@ -271,12 +271,11 @@
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
 
         torchEnabled = false;
-        updateFlashUI();
 
         setTimeout(() => {
-           const track = mediaStream.getVideoTracks()[0];
-           const caps = track.getCapabilities ? track.getCapabilities() : {};
-           torchSupported = !!caps.torch;
+           const track = mediaStream?.getVideoTracks?.()[0];
+           const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+           torchSupported = !!caps.torch && facingMode === 'environment';
            updateFlashUI();
         }, 200);
 
