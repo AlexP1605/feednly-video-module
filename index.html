@@ -353,31 +353,28 @@
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
       // CONFIGURATION 1080P STRICTE (PAS DE 4K)
-      const baseConstraints = {
+      const videoConstraints = {
         video: {
-            facingMode: facingMode,
-            // On vise 1080p, et on INTERDIT de dépasser cette valeur
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 }
-        }
-      };
-
-      const tryStart = async (withAudio) => {
-        const constraints = withAudio ? { ...baseConstraints, audio: true } : { ...baseConstraints, audio: false };
-        return navigator.mediaDevices.getUserMedia(constraints);
+          facingMode,
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+        },
       };
 
       try {
+        // On obtient d'abord la vidéo seule pour éviter le blocage quand l'audio est indisponible (ex: appel en cours).
+        mediaStream = await navigator.mediaDevices.getUserMedia({ ...videoConstraints, audio: false });
+
+        // Puis on tente d'ajouter l'audio si possible, sans bloquer si l'appareil le refuse.
         try {
-          mediaStream = await tryStart(true);
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioStream.getAudioTracks().forEach(track => mediaStream.addTrack(track));
         } catch (err) {
-          // Si l'audio est indisponible (ex: pendant un appel), on bascule en vidéo seule.
-          mediaStream = await tryStart(false);
           showError("Micro indisponible. Capture vidéo seulement.");
         }
 
         cameraPreview.srcObject = mediaStream;
-        cameraPreview.play().catch(e=>{});
+        cameraPreview.play().catch(() => {});
 
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
 
@@ -385,13 +382,13 @@
         updateFlashUI();
 
         setTimeout(() => {
-           const track = mediaStream.getVideoTracks()[0];
-           const caps = track.getCapabilities ? track.getCapabilities() : {};
-           torchSupported = !!caps.torch;
-           updateFlashUI();
+          const track = mediaStream.getVideoTracks()[0];
+          const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+          torchSupported = !!caps.torch;
+          updateFlashUI();
         }, 300);
 
-      } catch (error) { console.error(error); }
+      } catch (error) { console.error(error); showError("Impossible d'accéder à la caméra."); }
     }
 
     // --- LOGIQUE BOUTON ROBUSTE ---
