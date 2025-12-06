@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V18 (Mirror Selfie)</title>
+  <title>Camera Pro V19 (Timer + Mirror)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
       --glass-border: rgba(255, 255, 255, 0.2);
       --primary: #ff3b30;
+      --active-timer: #ffcc00; /* Couleur jaune pour le timer actif */
       --black-bar: #000000;
     }
 
@@ -22,94 +23,87 @@
     }
 
     /* --- CAMERA --- */
-    #camera-container { 
-      position: fixed; inset: 0; z-index: 1; 
-      background: transparent;
-    }
-
+    #camera-container { position: fixed; inset: 0; z-index: 1; background: transparent; }
     video {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      display: block;
-      background: transparent;
-      transform: scaleX(1); 
-      pointer-events: none;
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      background: transparent; transform: scaleX(1); pointer-events: none;
     }
-    
     video::-webkit-media-controls { display: none !important; }
-    video::-webkit-media-controls-play-button,
-    video::-webkit-media-controls-start-playback-button { display: none !important; }
 
-    /* --- PREVIEW UI --- */
-    #preview-overlay {
-      position: fixed; inset: 0; z-index: 50;
-      background: #000;
-      display: none; opacity: 0;
-      flex-direction: column;
-      transition: opacity 0.2s ease;
-    }
-    #preview-overlay.active { display: flex; opacity: 1; }
-
-    .preview-video-container {
-      flex: 1; position: relative; overflow: hidden;
-      border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
-      background: #000;
-    }
-
-    #preview-video {
-      width: 100%; height: 100%; object-fit: cover;
-      /* La transformation sera gérée dynamiquement par le JS */
-      pointer-events: none;
-    }
-
-    #preview-actions {
-      height: 110px; min-height: 110px;
-      background: var(--black-bar);
+    /* --- COUNTDOWN OVERLAY --- */
+    #countdown-display {
+      position: fixed; inset: 0; z-index: 40;
       display: flex; align-items: center; justify-content: center;
-      gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto;
+      font-size: 180px; font-weight: 800; color: #fff;
+      text-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      pointer-events: none;
+      opacity: 0; transform: scale(0.5);
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
-
-    .action-btn {
-      flex: 1; height: 54px; font-size: 16px; font-weight: 700;
-      border: none; cursor: pointer; border-radius: 14px;
-    }
-    #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
-    #next-button { background: #fff; color: #000; }
+    #countdown-display.active { opacity: 1; transform: scale(1); }
 
     /* --- CONTROLS --- */
     .controls { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
-    .top-bar { position: absolute; top: 0; width: 100%; padding: 20px; display: flex; justify-content: flex-end; pointer-events: auto; }
-    .bottom-bar { position: absolute; bottom: 0; width: 100%; padding: 0 30px 40px 30px; display: flex; align-items: center; justify-content: space-between; }
+    
+    /* Top bar avec espace entre les boutons */
+    .top-bar { 
+      position: absolute; top: 0; width: 100%; padding: 20px; 
+      display: flex; justify-content: space-between; /* Ecarte Flash et Timer */
+      pointer-events: auto;
+    }
+    
+    .bottom-bar { 
+      position: absolute; bottom: 0; width: 100%; padding: 0 30px 40px 30px; 
+      display: flex; align-items: center; justify-content: space-between; 
+    }
 
+    /* Masquer l'interface pendant l'enregistrement */
     body.recording .top-bar, body.recording .bottom-bar .side { opacity: 0; pointer-events: none; }
 
     .side { pointer-events: auto; }
+    
     .btn {
       width: 48px; height: 48px; border-radius: 50%;
       background: var(--glass-bg); border: 1px solid var(--glass-border);
       display: flex; align-items: center; justify-content: center;
       cursor: pointer; backdrop-filter: blur(10px);
+      color: #fff; font-weight: 600; font-size: 14px;
+      transition: all 0.2s;
     }
     .btn:active { transform: scale(0.9); }
+    
     .btn.flash-on { background: rgba(255, 215, 0, 0.25); border-color: #ffd700; }
     .btn.flash-on svg { fill: #ffd700; }
+    
+    /* Style spécifique bouton Timer */
+    #timer-btn { width: auto; padding: 0 14px; border-radius: 24px; gap: 6px; }
+    #timer-btn.active { background: rgba(255, 204, 0, 0.3); border-color: var(--active-timer); color: var(--active-timer); }
+    #timer-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
     .btn.disabled { opacity: 0.5; } 
     .btn svg { width: 24px; height: 24px; fill: white; }
 
+    /* --- RECORD BUTTON --- */
     .record-wrap { position: relative; width: 84px; height: 84px; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
     .record-progress { position: absolute; inset: -6px; width: 96px; height: 96px; transform: rotate(-90deg); pointer-events: none; }
     .record-progress circle { fill: none; stroke: var(--primary); stroke-width: 5px; stroke-linecap: round; stroke-dasharray: 0 999; transition: stroke-dashoffset 0.1s linear; }
-    
-    .record-button {
-      width: 72px; height: 72px; border-radius: 50%; background: #fff;
-      border: 4px solid rgba(255,255,255,0.4);
-      display: flex; align-items: center; justify-content: center; transition: all 0.2s;
-    }
+    .record-button { width: 72px; height: 72px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
     body.recording .record-button { background: var(--primary); transform: scale(1.15); border-color: rgba(255,255,255,0.6); animation: pulse 1.5s infinite; }
     body.recording .record-inner { width: 35%; height: 35%; background: #fff; border-radius: 6px; }
     .record-inner { width: 100%; height: 100%; border-radius: 50%; transition: all 0.2s; }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
 
+    /* --- PREVIEW UI --- */
+    #preview-overlay { position: fixed; inset: 0; z-index: 50; background: #000; display: none; opacity: 0; flex-direction: column; transition: opacity 0.2s ease; }
+    #preview-overlay.active { display: flex; opacity: 1; }
+    .preview-video-container { flex: 1; position: relative; overflow: hidden; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; background: #000; }
+    #preview-video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    #preview-actions { height: 110px; min-height: 110px; background: var(--black-bar); display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; }
+    .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
+    #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
+    #next-button { background: #fff; color: #000; }
+
+    /* --- UPLOAD --- */
     #upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s; }
     #upload-overlay.active { opacity: 1; visibility: visible; }
     .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -122,15 +116,23 @@
 </head>
 <body>
 
+  <div id="countdown-display"></div>
+
   <div id="camera-container">
     <video id="camera-preview" playsinline muted autoplay></video>
     
     <div class="controls">
       <div class="top-bar">
+        <button type="button" class="btn" id="timer-btn">
+          <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"></path></svg>
+          <span id="timer-text">OFF</span>
+        </button>
+
         <button type="button" class="btn" id="flash-btn">
           <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"></path></svg>
         </button>
       </div>
+
       <div class="bottom-bar">
         <div class="side">
           <button type="button" class="btn" id="gallery-btn">
@@ -169,6 +171,9 @@
     const recordBtn = document.getElementById('record-btn');
     const flashBtn = document.getElementById('flash-btn');
     const switchBtn = document.getElementById('switch-btn');
+    const timerBtn = document.getElementById('timer-btn');
+    const timerText = document.getElementById('timer-text');
+    const countdownDisplay = document.getElementById('countdown-display');
     const galleryBtn = document.getElementById('gallery-btn');
     const restartBtn = document.getElementById('restart-button');
     const nextBtn = document.getElementById('next-button');
@@ -185,10 +190,14 @@
     let previewObjectURL = null;
     
     let facingMode = 'environment';
-    let recordedFacingMode = 'environment'; // On stocke quelle caméra a filmé
+    let recordedFacingMode = 'environment';
     let torchSupported = false;
     let torchEnabled = false;
     let uploadURL = '';
+    
+    // Timer state: 0 = Off, 5 = 5s, 10 = 10s
+    let timerDuration = 0; 
+    let isCountingDown = false;
 
     const MAX_DURATION = 60000;
     const circumference = 2 * Math.PI * 46;
@@ -215,7 +224,7 @@
 
     function updateFlashUI() {
       const isBack = facingMode === 'environment';
-      if (!isBack || !torchSupported) {
+      if (!isBack) {
          flashBtn.classList.add('disabled');
          flashBtn.classList.remove('flash-on');
       } else {
@@ -225,28 +234,63 @@
     }
 
     async function toggleFlash() {
-      if (!mediaStream || facingMode !== 'environment' || !torchSupported) return;
+      if (!mediaStream || facingMode !== 'environment') return;
       const track = mediaStream.getVideoTracks()[0];
       torchEnabled = !torchEnabled;
-      try { await track.applyConstraints({ advanced: [{ torch: torchEnabled }] }); }
-      catch (err) {
-        torchEnabled = false;
-      }
+      try { await track.applyConstraints({ advanced: [{ torch: torchEnabled }] }); } 
+      catch (err) { }
       updateFlashUI();
+    }
+
+    // --- TIMER LOGIC ---
+    timerBtn.onclick = () => {
+      if (isRecording || isCountingDown) return;
+      
+      // Cycle: 0 -> 5 -> 10 -> 0
+      if (timerDuration === 0) timerDuration = 5;
+      else if (timerDuration === 5) timerDuration = 10;
+      else timerDuration = 0;
+
+      // Update UI
+      if (timerDuration === 0) {
+        timerText.textContent = "OFF";
+        timerBtn.classList.remove('active');
+      } else {
+        timerText.textContent = timerDuration + "s";
+        timerBtn.classList.add('active');
+      }
+    };
+
+    function startCountdownAndRecord() {
+      if (isCountingDown) return;
+      isCountingDown = true;
+      let count = timerDuration;
+      
+      // Hide controls slightly
+      document.querySelector('.controls').style.opacity = '0.5';
+
+      countdownDisplay.textContent = count;
+      countdownDisplay.classList.add('active');
+
+      const interval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          // Animation effect: reset opacity slightly to trigger transition? 
+          // Simple text update is safer
+          countdownDisplay.textContent = count;
+        } else {
+          clearInterval(interval);
+          countdownDisplay.classList.remove('active');
+          document.querySelector('.controls').style.opacity = '1';
+          isCountingDown = false;
+          startRecording();
+        }
+      }, 1000);
     }
 
     // --- CAMERA START ---
     async function startCamera() {
-      const previousStream = mediaStream;
-      torchSupported = false;
-
-      // Force a clean inline preview with no native controls visible
-      cameraPreview.autoplay = true;
-      cameraPreview.muted = true;
-      cameraPreview.playsInline = true;
-      cameraPreview.controls = false;
-      cameraPreview.removeAttribute('controls');
-      if ('disablePictureInPicture' in cameraPreview) cameraPreview.disablePictureInPicture = true;
+      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
       const constraints = {
         audio: true,
@@ -257,49 +301,44 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         cameraPreview.srcObject = mediaStream;
+        cameraPreview.play().catch(e=>{});
 
-        const playVideo = () => cameraPreview.play().catch(()=>{});
-        if (cameraPreview.readyState >= 2) playVideo();
-        else {
-          cameraPreview.onloadeddata = playVideo;
-          cameraPreview.onloadedmetadata = playVideo;
-        }
-
-        // PREVIEW LIVE :
-        // Front = Miroir (pour se coiffer)
-        // Back = Normal
+        // PREVIEW LIVE: Selfie = Miroir, Back = Normal
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
 
         torchEnabled = false;
-
+        updateFlashUI();
+        
         setTimeout(() => {
-           const track = mediaStream?.getVideoTracks?.()[0];
-           const caps = track && track.getCapabilities ? track.getCapabilities() : {};
-           torchSupported = !!caps.torch && facingMode === 'environment';
+           const track = mediaStream.getVideoTracks()[0];
+           const caps = track.getCapabilities ? track.getCapabilities() : {};
+           torchSupported = !!caps.torch;
            updateFlashUI();
         }, 200);
 
-        // Stop the previous stream only after the new one is ready to reduce flicker
-        if (previousStream) previousStream.getTracks().forEach(t => t.stop());
-
       } catch (error) {
         console.error(error);
-        if (facingMode === 'environment') {
-          facingMode = 'user';
-          updateFlashUI();
-          return startCamera();
-        }
       }
     }
 
-    // --- RECORDING ---
+    // --- CLICK HANDLER ---
+    recordBtn.onclick = () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        if (timerDuration > 0) {
+          startCountdownAndRecord();
+        } else {
+          startRecording();
+        }
+      }
+    };
+
     async function startRecording() {
       if (!mediaStream || !mediaStream.active) await startCamera();
       if (isRecording) return;
       
-      // On mémorise quelle caméra est utilisée
-      recordedFacingMode = facingMode;
-
+      recordedFacingMode = facingMode; // Mémorise la cam
       recordedChunks = [];
       let options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
       try { mediaRecorder = new MediaRecorder(mediaStream, options); }
@@ -337,15 +376,15 @@
        showPreview(recordedBlob);
     }
 
-    // --- PREVIEW (LECTURE) ---
+    // --- PREVIEW ---
     function showPreview(blob) {
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
        previewVideo.src = previewObjectURL;
        
-       // ICI EST LA SOLUTION POUR L'EFFET MIROIR EN LECTURE
-       // Si c'était un SELFIE (user) -> On affiche en MIROIR (scaleX -1)
-       // Si c'était BACK (environment) -> On affiche NORMAL (scaleX 1)
+       // ASTUCE MIROIR (0s de traitement)
+       // Selfie -> Miroir (scaleX -1)
+       // Back -> Normal (scaleX 1)
        if (recordedFacingMode === 'user') {
            previewVideo.style.transform = "scaleX(-1)";
        } else {
@@ -373,10 +412,8 @@
        facingMode = (facingMode === 'environment') ? 'user' : 'environment';
        startCamera();
     };
-    recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
     galleryBtn.onclick = () => galleryInput.click();
     
-    // Pour la galerie, on force le mode normal
     galleryInput.onchange = (e) => {
        const file = e.target.files[0];
        if(!file) return;
@@ -385,13 +422,15 @@
        v.onloadedmetadata = () => {
           if(v.duration > 61) { alert("Max 60s"); galleryInput.value=''; return; }
           recordedBlob = file;
-          recordedFacingMode = 'environment'; // Galerie = Toujours Normal
+          recordedFacingMode = 'environment'; // Force Normal
           showPreview(file);
           galleryInput.value = '';
        };
        v.src = URL.createObjectURL(file);
     };
     restartBtn.onclick = hidePreview;
+    
+    // --- UPLOAD ---
     nextBtn.onclick = () => {
        const url = getUploadURL();
        uploadOverlay.classList.add('active');
@@ -412,6 +451,12 @@
        };
        xhr.send(recordedBlob);
     };
+    previewOverlay.onclick = (e) => {
+      if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
+         previewVideo.paused ? previewVideo.play() : previewVideo.pause();
+      }
+    };
+
     // START
     startCamera();
 
