@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V13</title>
+  <title>Camera Pro V14 (Instant)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -42,10 +42,12 @@
       object-fit: cover;
       display: block;
       background: #000;
-      pointer-events: none; /* Bloque les clics sur la vidéo */
+      /* PLUS D'OPACITÉ 0 ICI -> Affichage direct */
+      opacity: 1; 
+      pointer-events: none;
     }
     
-    /* Masquer contrôles natifs */
+    /* Cache contrôles natifs */
     video::-webkit-media-controls { display: none !important; }
 
     /* --- PREVIEW SPLIT --- */
@@ -75,7 +77,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(1); /* Toujours mode normal pour le replay */
+      transform: scaleX(1); /* Replay normal sans miroir */
     }
 
     #preview-actions {
@@ -134,7 +136,6 @@
     body.recording .bottom-bar .side {
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s;
     }
 
     /* --- BUTTONS --- */
@@ -157,7 +158,10 @@
     
     .btn.flash-on { background: rgba(255, 215, 0, 0.25); border-color: #ffd700; }
     .btn.flash-on svg { fill: #ffd700; }
-    .btn.disabled { opacity: 0.3; pointer-events: none; }
+    
+    /* On enlève le style disabled strict pour laisser une chance au flash */
+    .btn.disabled { opacity: 0.5; pointer-events: auto; } 
+    
     .btn svg { width: 24px; height: 24px; fill: white; }
 
     /* --- RECORD BUTTON --- */
@@ -367,35 +371,41 @@
       }
 
       function updateFlashUI() {
-        const disabled = facingMode === 'user' || !torchSupported;
-        if(disabled) {
+        const isBackCamera = facingMode === 'environment';
+        
+        // Si ce n'est pas la caméra arrière, on grise
+        if (!isBackCamera) {
            flashBtn.classList.add('disabled');
            flashBtn.classList.remove('flash-on');
-        } else {
-           flashBtn.classList.remove('disabled');
-           flashBtn.classList.toggle('flash-on', torchEnabled);
+           return;
         }
+
+        // Si c'est la caméra arrière, on active le bouton
+        flashBtn.classList.remove('disabled');
+        flashBtn.classList.toggle('flash-on', torchEnabled);
       }
 
-      // --- FLASH (SIMPLE & DIRECT) ---
+      // --- FLASH (ROBUSTE) ---
       async function toggleFlash() {
-        if (!mediaStream || facingMode === 'user' || !torchSupported) return;
+        if (!mediaStream || facingMode !== 'environment') return;
         
         const track = mediaStream.getVideoTracks()[0];
         torchEnabled = !torchEnabled;
         
         try {
           await track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
-          flashBtn.classList.toggle('flash-on', torchEnabled);
+          updateFlashUI();
         } catch (err) {
           console.log("Flash error", err);
-          torchEnabled = !torchEnabled; // Annuler si échec
+          // On ne revert pas l'état visuel tout de suite, certains téléphones 
+          // allument le flash même si l'API renvoie une erreur.
+          updateFlashUI();
         }
       }
 
-      // --- CAMERA (CLEAN START) ---
+      // --- CAMERA (INSTANT START) ---
       async function startCamera() {
-        // 1. Coupure propre de l'ancien flux pour éviter les conflits
+        // 1. Coupure brutale pour éviter les conflits
         if (mediaStream) {
           mediaStream.getTracks().forEach(t => t.stop());
         }
@@ -413,17 +423,23 @@
         try {
           mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
           cameraPreview.srcObject = mediaStream;
+          
+          // Lancement immédiat sans fioritures
+          cameraPreview.play().catch(e => console.log(e));
 
           // 3. Gestion Miroir
           if(facingMode === 'user') cameraPreview.style.transform = "scaleX(-1)";
           else cameraPreview.style.transform = "scaleX(1)";
 
-          // 4. Détection Flash (avec petit délai pour stabilité)
+          // 4. Détection Flash
+          torchEnabled = false;
+          updateFlashUI();
+          
+          // Petit délai pour laisser le hardware se caler avant de checker le support torch
           setTimeout(() => {
              const track = mediaStream.getVideoTracks()[0];
              const caps = track.getCapabilities ? track.getCapabilities() : {};
-             torchSupported = !!caps.torch && facingMode === 'environment';
-             torchEnabled = false;
+             torchSupported = !!caps.torch;
              updateFlashUI();
           }, 500);
 
@@ -488,7 +504,7 @@
          previewObjectURL = URL.createObjectURL(blob);
          previewVideo.src = previewObjectURL;
          
-         // Lecture NORMALE (pas de miroir)
+         // Lecture NORMALE (pas de miroir) - C'est ici que ça corrige la gauche/droite
          previewVideo.style.transform = "scaleX(1)";
          
          previewOverlay.classList.add('active');
@@ -563,7 +579,7 @@
          };
          xhr.send(recordedBlob);
       };
-
+      
       previewOverlay.onclick = (e) => {
         if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
            previewVideo.paused ? previewVideo.play() : previewVideo.pause();
