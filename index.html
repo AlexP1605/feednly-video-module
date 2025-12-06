@@ -37,6 +37,8 @@
     }
     
     video::-webkit-media-controls { display: none !important; }
+    video::-webkit-media-controls-play-button,
+    video::-webkit-media-controls-start-playback-button { display: none !important; }
 
     /* --- PREVIEW UI --- */
     #preview-overlay {
@@ -400,12 +402,6 @@
        };
        xhr.send(recordedBlob);
     };
-    previewOverlay.onclick = (e) => {
-      if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
-         previewVideo.paused ? previewVideo.play() : previewVideo.pause();
-      }
-    };
-
     // START
     startCamera();
 
