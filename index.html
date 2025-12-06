@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V37 (Optimisation & Fluidité)</title>
+  <title>Camera Pro V38 (Fluidité Recommencer & Audio Final Fix)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -353,21 +353,29 @@
 
       const interval = setInterval(() => {
         count--;
-        if (count > 0) {
+        
+        // --- CORRECTION BIP AUDIO : Bip final sur 1 (avant le lancement) ---
+        if (count > 1) { 
           countdownDisplay.textContent = count;
           playBeep(1000, 'short');
+        } else if (count === 1) {
+          // Bip final (action) sur le chiffre 1 pour qu'il ne soit PAS enregistré
+          countdownDisplay.textContent = count;
+          playBeep(1500, 'long'); 
         } else {
+          // count === 0
           clearInterval(interval);
           countdownDisplay.classList.remove('active');
           document.querySelector('.controls').style.opacity = '1';
           isCountingDown = false;
-          playBeep(1500, 'long');
-          startRecording();
+          startRecording(); // Démarrage SILENCIEUX ici
         }
       }, 1000);
     }
 
+    // Fonction pour redémarrer le flux de la caméra
     async function startCamera() {
+      // S'assurer que les anciens flux sont coupés (pour une nouvelle acquisition propre)
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       
       const constraints = {
@@ -382,7 +390,12 @@
       try {
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
+        
+        // --- CORRECTION CLÉ POUR ÉVITER LE FREEZE (RECHARGEMENT) ---
+        cameraPreview.srcObject = null;
         cameraPreview.srcObject = mediaStream;
+        // --- FIN DE LA CORRECTION ---
+        
         cameraPreview.play().catch(e=>{});
         
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
@@ -505,7 +518,13 @@
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
-       startCamera();
+       
+       // --- CORRECTION FLUIDITÉ : Ne pas appeler startCamera ici ---
+       // Le flux vidéo doit rester actif. On redémarre seulement si le flux a été coupé
+       if (!mediaStream || !mediaStream.active) {
+           startCamera();
+       }
+       // --- FIN DE LA CORRECTION ---
     }
 
     previewVideo.onloadedmetadata = () => {
@@ -530,7 +549,6 @@
     // --- Galerie: Coupe micro, garde vidéo, ouvre menu ---
     galleryBtn.onclick = () => {
        if (mediaStream) {
-           // On coupe uniquement les pistes AUDIO pour éviter le conflit "En appel"
            mediaStream.getAudioTracks().forEach(track => {
                track.stop();
                mediaStream.removeTrack(track);
