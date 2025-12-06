@@ -530,13 +530,21 @@
        previewVideo.play().catch(()=>{});
     }
 
-    function hidePreview() {
-       previewOverlay.classList.remove('active');
-       document.body.classList.remove('showing-preview'); 
+    function resetPreviewState() {
        previewVideo.pause();
        previewVideo.src = '';
+       if (previewObjectURL) {
+           URL.revokeObjectURL(previewObjectURL);
+           previewObjectURL = null;
+       }
        recordedBlob = null;
-       
+    }
+
+    function hidePreview() {
+       previewOverlay.classList.remove('active');
+       document.body.classList.remove('showing-preview');
+       resetPreviewState();
+
        if (!mediaStream || !mediaStream.active) {
            startCamera();
        }
@@ -574,8 +582,10 @@
     
     // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
-       // 1. Nettoyer l'ancienne preview pour éviter le bug d'affichage
-       hidePreview();
+       // Nettoyage complet pour éviter la réouverture de l'ancienne preview
+       previewOverlay.classList.remove('active');
+       document.body.classList.remove('showing-preview');
+       resetPreviewState();
 
        if (mediaStream) {
            mediaStream.getAudioTracks().forEach(track => {
