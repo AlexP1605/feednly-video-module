@@ -213,7 +213,7 @@
 
     function updateFlashUI() {
       const isBack = facingMode === 'environment';
-      if (!isBack) {
+      if (!isBack || !torchSupported) {
          flashBtn.classList.add('disabled');
          flashBtn.classList.remove('flash-on');
       } else {
@@ -223,11 +223,13 @@
     }
 
     async function toggleFlash() {
-      if (!mediaStream || facingMode !== 'environment') return;
+      if (!mediaStream || facingMode !== 'environment' || !torchSupported) return;
       const track = mediaStream.getVideoTracks()[0];
       torchEnabled = !torchEnabled;
-      try { await track.applyConstraints({ advanced: [{ torch: torchEnabled }] }); } 
-      catch (err) { }
+      try { await track.applyConstraints({ advanced: [{ torch: torchEnabled }] }); }
+      catch (err) {
+        torchEnabled = false;
+      }
       updateFlashUI();
     }
 
@@ -235,6 +237,7 @@
     async function startCamera() {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
+      torchSupported = false;
       const constraints = {
         audio: true,
         video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
@@ -244,7 +247,13 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         cameraPreview.srcObject = mediaStream;
-        cameraPreview.play().catch(e=>{});
+        const playVideo = () => cameraPreview.play().catch(()=>{});
+
+        if (cameraPreview.readyState >= 2) playVideo();
+        else {
+          cameraPreview.onloadeddata = playVideo;
+          cameraPreview.onloadedmetadata = playVideo;
+        }
 
         // PREVIEW LIVE :
         // Front = Miroir (pour se coiffer)
@@ -263,6 +272,11 @@
 
       } catch (error) {
         console.error(error);
+        if (facingMode === 'environment') {
+          facingMode = 'user';
+          updateFlashUI();
+          return startCamera();
+        }
       }
     }
 
