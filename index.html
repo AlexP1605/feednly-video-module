@@ -237,9 +237,17 @@
 
     // --- CAMERA START ---
     async function startCamera() {
-      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-
+      const previousStream = mediaStream;
       torchSupported = false;
+
+      // Force a clean inline preview with no native controls visible
+      cameraPreview.autoplay = true;
+      cameraPreview.muted = true;
+      cameraPreview.playsInline = true;
+      cameraPreview.controls = false;
+      cameraPreview.removeAttribute('controls');
+      if ('disablePictureInPicture' in cameraPreview) cameraPreview.disablePictureInPicture = true;
+
       const constraints = {
         audio: true,
         video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
@@ -249,8 +257,8 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         cameraPreview.srcObject = mediaStream;
-        const playVideo = () => cameraPreview.play().catch(()=>{});
 
+        const playVideo = () => cameraPreview.play().catch(()=>{});
         if (cameraPreview.readyState >= 2) playVideo();
         else {
           cameraPreview.onloadeddata = playVideo;
@@ -264,13 +272,16 @@
 
         torchEnabled = false;
         updateFlashUI();
-        
+
         setTimeout(() => {
            const track = mediaStream.getVideoTracks()[0];
            const caps = track.getCapabilities ? track.getCapabilities() : {};
            torchSupported = !!caps.torch;
            updateFlashUI();
         }, 200);
+
+        // Stop the previous stream only after the new one is ready to reduce flicker
+        if (previousStream) previousStream.getTracks().forEach(t => t.stop());
 
       } catch (error) {
         console.error(error);
