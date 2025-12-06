@@ -351,11 +351,10 @@
 
     async function startCamera() {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-      
+
       // CONFIGURATION 1080P STRICTE (PAS DE 4K)
-      const constraints = {
-        audio: true,
-        video: { 
+      const baseConstraints = {
+        video: {
             facingMode: facingMode,
             // On vise 1080p, et on INTERDIT de dépasser cette valeur
             width: { ideal: 1920, max: 1920 },
@@ -363,17 +362,28 @@
         }
       };
 
+      const tryStart = async (withAudio) => {
+        const constraints = withAudio ? { ...baseConstraints, audio: true } : { ...baseConstraints, audio: false };
+        return navigator.mediaDevices.getUserMedia(constraints);
+      };
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        mediaStream = stream;
+        try {
+          mediaStream = await tryStart(true);
+        } catch (err) {
+          // Si l'audio est indisponible (ex: pendant un appel), on bascule en vidéo seule.
+          mediaStream = await tryStart(false);
+          showError("Micro indisponible. Capture vidéo seulement.");
+        }
+
         cameraPreview.srcObject = mediaStream;
         cameraPreview.play().catch(e=>{});
-        
+
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
 
         torchEnabled = false;
         updateFlashUI();
-        
+
         setTimeout(() => {
            const track = mediaStream.getVideoTracks()[0];
            const caps = track.getCapabilities ? track.getCapabilities() : {};
