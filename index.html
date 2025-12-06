@@ -336,4 +336,141 @@
         updateFlashUI();
         
         setTimeout(() => {
-           const track = mediaStream.getVideoTracks()
+           const track = mediaStream.getVideoTracks()[0];
+           const caps = track.getCapabilities ? track.getCapabilities() : {};
+           torchSupported = !!caps.torch;
+           updateFlashUI();
+        }, 200);
+
+      } catch (error) { console.error(error); }
+    }
+
+    recordBtn.onclick = () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        if (timerDuration > 0) startCountdownAndRecord();
+        else startRecording();
+      }
+    };
+
+    async function startRecording() {
+      if (!mediaStream || !mediaStream.active) await startCamera();
+      if (isRecording) return;
+      
+      recordedFacingMode = facingMode; 
+      recordedChunks = [];
+      let options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
+      try { mediaRecorder = new MediaRecorder(mediaStream, options); }
+      catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
+
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+         isRecording = false;
+         finalizeRecording();
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      document.body.classList.add('recording');
+      
+      recordingStartTime = Date.now();
+      progressCircle.style.strokeDashoffset = circumference;
+      const tick = () => {
+         if (!isRecording) return;
+         const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
+         progressCircle.style.strokeDashoffset = circumference * (1 - p);
+         if (p < 1) progressInterval = requestAnimationFrame(tick);
+         else stopRecording();
+      };
+      progressInterval = requestAnimationFrame(tick);
+    }
+
+    function stopRecording() { if (isRecording && mediaRecorder) mediaRecorder.stop(); }
+
+    function finalizeRecording() {
+       if(progressInterval) cancelAnimationFrame(progressInterval);
+       document.body.classList.remove('recording');
+       progressCircle.style.strokeDashoffset = circumference;
+       if (torchEnabled) toggleFlash();
+       showPreview(recordedBlob);
+    }
+
+    function showPreview(blob) {
+       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
+       previewObjectURL = URL.createObjectURL(blob);
+       previewVideo.src = previewObjectURL;
+       
+       if (recordedFacingMode === 'user') previewVideo.style.transform = "scaleX(-1)";
+       else previewVideo.style.transform = "scaleX(1)";
+       
+       previewOverlay.classList.add('active');
+       document.body.classList.add('showing-preview');
+       previewVideo.play().catch(()=>{});
+    }
+
+    function hidePreview() {
+       previewOverlay.classList.remove('active');
+       document.body.classList.remove('showing-preview');
+       previewVideo.pause();
+       previewVideo.src = '';
+       recordedBlob = null;
+       if(!mediaStream || !mediaStream.active) startCamera();
+    }
+
+    flashBtn.onclick = toggleFlash;
+    switchBtn.onclick = () => {
+       switchBtn.style.transform = "rotate(180deg)";
+       setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
+       facingMode = (facingMode === 'environment') ? 'user' : 'environment';
+       startCamera();
+    };
+    galleryBtn.onclick = () => galleryInput.click();
+    
+    galleryInput.onchange = (e) => {
+       const file = e.target.files[0];
+       if(!file) return;
+       const v = document.createElement('video');
+       v.preload = 'metadata';
+       v.onloadedmetadata = () => {
+          if(v.duration > 61) { alert("Max 60s"); galleryInput.value=''; return; }
+          recordedBlob = file;
+          recordedFacingMode = 'environment';
+          showPreview(file);
+          galleryInput.value = '';
+       };
+       v.src = URL.createObjectURL(file);
+    };
+    restartBtn.onclick = hidePreview;
+    
+    nextBtn.onclick = () => {
+       const url = getUploadURL();
+       uploadOverlay.classList.add('active');
+       uploadText.textContent = "0%";
+       if(!url || !recordedBlob) {
+          uploadText.textContent = "Erreur"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); return;
+       }
+       const xhr = new XMLHttpRequest();
+       xhr.open('PUT', url, true);
+       xhr.setRequestHeader('Content-Type', recordedBlob.type);
+       xhr.upload.onprogress = e => { if(e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%"; };
+       xhr.onload = () => {
+          if(xhr.status < 300) {
+             uploadText.textContent = "Succès";
+             const assetId = url.split('/').pop().split('?')[0];
+             notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
+          } else { uploadText.textContent = "Échec"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); }
+       };
+       xhr.send(recordedBlob);
+    };
+    previewOverlay.onclick = (e) => {
+      if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
+         previewVideo.paused ? previewVideo.play() : previewVideo.pause();
+      }
+    };
+
+    startCamera();
+
+  </script>
+</body>
+</html>
