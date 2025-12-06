@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V15</title>
+  <title>Camera Pro V18 (Mirror Selfie)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -12,249 +12,110 @@
       --black-bar: #000000;
     }
 
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      -webkit-touch-callout: none;
-    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-touch-callout: none; }
 
     html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
+      margin: 0; width: 100%; height: 100%;
       background: #000;
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     }
 
     /* --- CAMERA --- */
-    #camera-container {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      background: #000;
+    #camera-container { 
+      position: fixed; inset: 0; z-index: 1; 
+      background: transparent;
     }
 
     video {
-      width: 100%;
-      height: 100%;
+      width: 100%; height: 100%;
       object-fit: cover;
       display: block;
-      background: #000; /* Fond noir si pas d'image */
-      transform: scaleX(1); /* Par défaut : PAS DE MIROIR */
+      background: transparent;
+      transform: scaleX(1); 
+      pointer-events: none;
     }
     
-    /* Bloque les contrôles natifs */
     video::-webkit-media-controls { display: none !important; }
 
-    /* --- PREVIEW SPLIT --- */
+    /* --- PREVIEW UI --- */
     #preview-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
+      position: fixed; inset: 0; z-index: 50;
       background: #000;
-      display: none;
-      opacity: 0;
+      display: none; opacity: 0;
       flex-direction: column;
       transition: opacity 0.2s ease;
     }
-    
     #preview-overlay.active { display: flex; opacity: 1; }
 
     .preview-video-container {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-      border-bottom-left-radius: 24px;
-      border-bottom-right-radius: 24px;
+      flex: 1; position: relative; overflow: hidden;
+      border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
       background: #000;
     }
 
     #preview-video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transform: scaleX(1) !important; /* FORCE : Jamais de miroir en lecture */
+      width: 100%; height: 100%; object-fit: cover;
+      /* La transformation sera gérée dynamiquement par le JS */
       pointer-events: none;
     }
 
     #preview-actions {
-      height: 110px;
-      min-height: 110px;
+      height: 110px; min-height: 110px;
       background: var(--black-bar);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 15px;
-      padding: 0 24px;
-      z-index: 60;
-      pointer-events: auto;
+      display: flex; align-items: center; justify-content: center;
+      gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto;
     }
 
     .action-btn {
-      flex: 1;
-      height: 54px;
-      font-size: 16px;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      border-radius: 14px;
+      flex: 1; height: 54px; font-size: 16px; font-weight: 700;
+      border: none; cursor: pointer; border-radius: 14px;
     }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
 
     /* --- CONTROLS --- */
-    .controls {
-      position: absolute;
-      inset: 0;
-      z-index: 20;
-      pointer-events: none;
-    }
+    .controls { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
+    .top-bar { position: absolute; top: 0; width: 100%; padding: 20px; display: flex; justify-content: flex-end; }
+    .bottom-bar { position: absolute; bottom: 0; width: 100%; padding: 0 30px 40px 30px; display: flex; align-items: center; justify-content: space-between; }
 
-    .top-bar {
-      position: absolute;
-      top: 0;
-      width: 100%;
-      padding: 20px;
-      display: flex;
-      justify-content: flex-end;
-    }
+    body.recording .top-bar, body.recording .bottom-bar .side { opacity: 0; pointer-events: none; }
 
-    .bottom-bar {
-      position: absolute;
-      bottom: 0;
-      width: 100%;
-      padding: 0 30px 40px 30px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    body.recording .top-bar,
-    body.recording .bottom-bar .side {
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    /* --- BUTTONS --- */
     .side { pointer-events: auto; }
-
     .btn {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--glass-bg); border: 1px solid var(--glass-border);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; backdrop-filter: blur(10px);
     }
     .btn:active { transform: scale(0.9); }
-    
     .btn.flash-on { background: rgba(255, 215, 0, 0.25); border-color: #ffd700; }
     .btn.flash-on svg { fill: #ffd700; }
-    
     .btn.disabled { opacity: 0.5; } 
-    
     .btn svg { width: 24px; height: 24px; fill: white; }
 
-    /* --- RECORD BUTTON --- */
-    .record-wrap {
-      position: relative;
-      width: 84px;
-      height: 84px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: auto;
-    }
+    .record-wrap { position: relative; width: 84px; height: 84px; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+    .record-progress { position: absolute; inset: -6px; width: 96px; height: 96px; transform: rotate(-90deg); pointer-events: none; }
+    .record-progress circle { fill: none; stroke: var(--primary); stroke-width: 5px; stroke-linecap: round; stroke-dasharray: 0 999; transition: stroke-dashoffset 0.1s linear; }
     
-    .record-progress {
-      position: absolute;
-      inset: -6px;
-      width: 96px;
-      height: 96px;
-      transform: rotate(-90deg);
-      pointer-events: none;
-    }
-
-    .record-progress circle {
-      fill: none;
-      stroke: var(--primary);
-      stroke-width: 5px;
-      stroke-linecap: round;
-      stroke-dasharray: 0 999;
-      transition: stroke-dashoffset 0.1s linear;
-    }
-
     .record-button {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: #fff;
+      width: 72px; height: 72px; border-radius: 50%; background: #fff;
       border: 4px solid rgba(255,255,255,0.4);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; transition: all 0.2s;
     }
+    body.recording .record-button { background: var(--primary); transform: scale(1.15); border-color: rgba(255,255,255,0.6); animation: pulse 1.5s infinite; }
+    body.recording .record-inner { width: 35%; height: 35%; background: #fff; border-radius: 6px; }
+    .record-inner { width: 100%; height: 100%; border-radius: 50%; transition: all 0.2s; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); } }
 
-    body.recording .record-button {
-      background: var(--primary);
-      transform: scale(1.15);
-      border-color: rgba(255,255,255,0.6);
-      animation: pulse 1.5s infinite;
-    }
-
-    body.recording .record-inner {
-      width: 35%;
-      height: 35%;
-      background: #fff;
-      border-radius: 6px;
-    }
-
-    .record-inner {
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      transition: all 0.2s;
-    }
-
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.5); }
-      70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
-    }
-
-    /* --- UPLOAD OVERLAY --- */
-    #upload-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.95);
-      z-index: 100;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.2s;
-    }
+    #upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s; }
     #upload-overlay.active { opacity: 1; visibility: visible; }
-    
-    .spinner {
-      width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite;
-    }
+    .spinner { width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     #upload-text { margin-top: 20px; color: #fff; font-weight: 600; font-size: 18px; }
 
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
-
   </style>
 </head>
 <body>
@@ -268,23 +129,16 @@
           <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"></path></svg>
         </button>
       </div>
-      
       <div class="bottom-bar">
         <div class="side">
           <button type="button" class="btn" id="gallery-btn">
              <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"></path></svg>
           </button>
         </div>
-        
         <div class="record-wrap">
-          <svg class="record-progress" viewBox="0 0 100 100">
-             <circle id="record-progress-circle" cx="50" cy="50" r="46"></circle>
-          </svg>
-          <div class="record-button" id="record-btn">
-            <div class="record-inner"></div>
-          </div>
+          <svg class="record-progress" viewBox="0 0 100 100"><circle id="record-progress-circle" cx="50" cy="50" r="46"></circle></svg>
+          <div class="record-button" id="record-btn"><div class="record-inner"></div></div>
         </div>
-        
         <div class="side">
           <button type="button" class="btn" id="switch-btn">
              <svg viewBox="0 0 24 24"><path d="M12 6v3l4-4-4-4v3c-4.42 0-8 3.58-8 8 0 1.57.46 3.03 1.24 4.26L6.7 14.8c-.45-.83-.7-1.79-.7-2.8 0-3.31 2.69-6 6-6zm6.76 1.74L17.3 9.2c.44.84.7 1.79.7 2.8 0 3.31-2.69 6-6 6v-3l-4 4 4 4v-3c4.42 0 8-3.58 8-8 0-1.57-.46-3.03-1.24-4.26z"></path></svg>
@@ -295,285 +149,251 @@
   </div>
 
   <div id="preview-overlay">
-    <div class="preview-video-container">
-      <video id="preview-video" playsinline webkit-playsinline loop></video>
-    </div>
+    <div class="preview-video-container"><video id="preview-video" playsinline webkit-playsinline loop></video></div>
     <div id="preview-actions">
       <button type="button" id="restart-button" class="action-btn">Recommencer</button>
       <button type="button" id="next-button" class="action-btn">Suivant</button>
     </div>
   </div>
 
-  <div id="upload-overlay">
-    <div class="spinner"></div>
-    <div id="upload-text">Préparation...</div>
-  </div>
-
+  <div id="upload-overlay"><div class="spinner"></div><div id="upload-text">Préparation...</div></div>
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
-      // --- DOM VARIABLES ---
-      const cameraPreview = document.getElementById('camera-preview');
-      const previewVideo = document.getElementById('preview-video');
-      const previewOverlay = document.getElementById('preview-overlay');
-      
-      const recordBtn = document.getElementById('record-btn');
-      const flashBtn = document.getElementById('flash-btn');
-      const switchBtn = document.getElementById('switch-btn');
-      const galleryBtn = document.getElementById('gallery-btn');
-      const restartBtn = document.getElementById('restart-button');
-      const nextBtn = document.getElementById('next-button');
-      
-      const galleryInput = document.getElementById('galleryInput');
-      const uploadOverlay = document.getElementById('upload-overlay');
-      const uploadText = document.getElementById('upload-text');
-      const progressCircle = document.getElementById('record-progress-circle');
+    const cameraPreview = document.getElementById('camera-preview');
+    const previewVideo = document.getElementById('preview-video');
+    const previewOverlay = document.getElementById('preview-overlay');
+    const recordBtn = document.getElementById('record-btn');
+    const flashBtn = document.getElementById('flash-btn');
+    const switchBtn = document.getElementById('switch-btn');
+    const galleryBtn = document.getElementById('gallery-btn');
+    const restartBtn = document.getElementById('restart-button');
+    const nextBtn = document.getElementById('next-button');
+    const galleryInput = document.getElementById('galleryInput');
+    const uploadOverlay = document.getElementById('upload-overlay');
+    const uploadText = document.getElementById('upload-text');
+    const progressCircle = document.getElementById('record-progress-circle');
 
-      // --- STATE ---
-      let mediaStream = null;
-      let mediaRecorder = null;
-      let recordedChunks = [];
-      let isRecording = false;
-      let recordedBlob = null;
-      let previewObjectURL = null;
-      
-      let facingMode = 'environment';
-      let torchSupported = false;
-      let torchEnabled = false;
-      let uploadURL = '';
+    let mediaStream = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecording = false;
+    let recordedBlob = null;
+    let previewObjectURL = null;
+    
+    let facingMode = 'environment';
+    let recordedFacingMode = 'environment'; // On stocke quelle caméra a filmé
+    let torchSupported = false;
+    let torchEnabled = false;
+    let uploadURL = '';
 
-      const MAX_DURATION = 60000;
-      const circumference = 2 * Math.PI * 46;
-      let recordingStartTime = 0;
-      let progressInterval = null;
+    const MAX_DURATION = 60000;
+    const circumference = 2 * Math.PI * 46;
+    let recordingStartTime = 0;
+    let progressInterval = null;
+    
+    progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+    progressCircle.style.strokeDashoffset = circumference;
+
+    function notifyHost(payload) {
+      try {
+        const msg = JSON.stringify(payload);
+        if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
+        else if (window.parent) window.parent.postMessage(msg, '*');
+      } catch (e) {}
+    }
+
+    function getUploadURL() {
+      const p = new URLSearchParams(window.location.search);
+      let u = uploadURL || p.get('upload_url') || p.get('url');
+      if(!u) try { u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url'); } catch(e){}
+      return u;
+    }
+
+    function updateFlashUI() {
+      const isBack = facingMode === 'environment';
+      if (!isBack) {
+         flashBtn.classList.add('disabled');
+         flashBtn.classList.remove('flash-on');
+      } else {
+         flashBtn.classList.remove('disabled');
+         flashBtn.classList.toggle('flash-on', torchEnabled);
+      }
+    }
+
+    async function toggleFlash() {
+      if (!mediaStream || facingMode !== 'environment') return;
+      const track = mediaStream.getVideoTracks()[0];
+      torchEnabled = !torchEnabled;
+      try { await track.applyConstraints({ advanced: [{ torch: torchEnabled }] }); } 
+      catch (err) { }
+      updateFlashUI();
+    }
+
+    // --- CAMERA START ---
+    async function startCamera() {
+      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+
+      const constraints = {
+        audio: true,
+        video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        mediaStream = stream;
+        cameraPreview.srcObject = mediaStream;
+        cameraPreview.play().catch(e=>{});
+
+        // PREVIEW LIVE :
+        // Front = Miroir (pour se coiffer)
+        // Back = Normal
+        cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
+
+        torchEnabled = false;
+        updateFlashUI();
+        
+        setTimeout(() => {
+           const track = mediaStream.getVideoTracks()[0];
+           const caps = track.getCapabilities ? track.getCapabilities() : {};
+           torchSupported = !!caps.torch;
+           updateFlashUI();
+        }, 200);
+
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    // --- RECORDING ---
+    async function startRecording() {
+      if (!mediaStream || !mediaStream.active) await startCamera();
+      if (isRecording) return;
       
-      progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+      // On mémorise quelle caméra est utilisée
+      recordedFacingMode = facingMode;
+
+      recordedChunks = [];
+      let options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
+      try { mediaRecorder = new MediaRecorder(mediaStream, options); }
+      catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
+
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+         isRecording = false;
+         finalizeRecording();
+      };
+      mediaRecorder.start();
+      isRecording = true;
+      document.body.classList.add('recording');
+      
+      recordingStartTime = Date.now();
       progressCircle.style.strokeDashoffset = circumference;
-
-      // --- HELPERS ---
-      function notifyHost(payload) {
-        try {
-          const msg = JSON.stringify(payload);
-          if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
-          else if (window.parent) window.parent.postMessage(msg, '*');
-        } catch (e) {}
-      }
-
-      function getUploadURL() {
-        const p = new URLSearchParams(window.location.search);
-        let u = uploadURL || p.get('upload_url') || p.get('url');
-        if(!u) try { u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url'); } catch(e){}
-        return u;
-      }
-
-      function updateFlashUI() {
-        const isBackCamera = facingMode === 'environment';
-        
-        if (!isBackCamera) {
-           flashBtn.classList.add('disabled');
-           flashBtn.classList.remove('flash-on');
-        } else {
-           flashBtn.classList.remove('disabled');
-           flashBtn.classList.toggle('flash-on', torchEnabled);
-        }
-      }
-
-      // --- FLASH ---
-      async function toggleFlash() {
-        if (!mediaStream || facingMode !== 'environment') return;
-        
-        const track = mediaStream.getVideoTracks()[0];
-        torchEnabled = !torchEnabled;
-        
-        try {
-          await track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
-          updateFlashUI();
-        } catch (err) {
-          updateFlashUI();
-        }
-      }
-
-      // --- CAMERA (VITESSE MAXIMALE) ---
-      async function startCamera() {
-        // Stop flux précédent
-        if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-
-        // Résolution Paysage pour Dézoom
-        const constraints = {
-          audio: true,
-          video: { 
-            facingMode: facingMode,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          }
-        };
-
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-          cameraPreview.srcObject = mediaStream;
-
-          // GESTION MIROIR
-          // Back Camera : scaleX(1) -> PAS DE MIROIR (Réalité)
-          // Front Camera : scaleX(-1) -> MIROIR (Selfie)
-          if(facingMode === 'user') {
-             cameraPreview.style.transform = "scaleX(-1)";
-          } else {
-             cameraPreview.style.transform = "scaleX(1)";
-          }
-
-          // Détection Flash différée pour stabilité
-          setTimeout(() => {
-             const track = mediaStream.getVideoTracks()[0];
-             const caps = track.getCapabilities ? track.getCapabilities() : {};
-             torchSupported = !!caps.torch;
-             updateFlashUI();
-          }, 300);
-
-        } catch (error) {
-          notifyHost({ status: 'error', message: 'Camera start failed' });
-        }
-      }
-
-      // --- RECORDING ---
-      async function startRecording() {
-        if (!mediaStream || !mediaStream.active) await startCamera();
-        if (isRecording) return;
-
-        recordedChunks = [];
-        let options = {};
-        if (MediaRecorder.isTypeSupported('video/mp4')) options = { mimeType: 'video/mp4' };
-        
-        try { mediaRecorder = new MediaRecorder(mediaStream, options); }
-        catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
-
-        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-        
-        mediaRecorder.onstop = () => {
-           recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-           isRecording = false;
-           finalizeRecording();
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        document.body.classList.add('recording');
-
-        recordingStartTime = Date.now();
-        progressCircle.style.strokeDashoffset = circumference;
-        const tick = () => {
-           if (!isRecording) return;
-           const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
-           progressCircle.style.strokeDashoffset = circumference * (1 - p);
-           if (p < 1) progressInterval = requestAnimationFrame(tick);
-           else stopRecording();
-        };
-        progressInterval = requestAnimationFrame(tick);
-      }
-
-      function stopRecording() {
-         if (isRecording && mediaRecorder) mediaRecorder.stop();
-      }
-
-      function finalizeRecording() {
-         if(progressInterval) cancelAnimationFrame(progressInterval);
-         document.body.classList.remove('recording');
-         progressCircle.style.strokeDashoffset = circumference;
-         
-         if (torchEnabled) toggleFlash();
-         showPreview(recordedBlob);
-      }
-
-      // --- PREVIEW ---
-      function showPreview(blob) {
-         if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
-         previewObjectURL = URL.createObjectURL(blob);
-         previewVideo.src = previewObjectURL;
-         
-         // IMPORTANTE : On force le mode NORMAL (Réalité) pour la lecture
-         previewVideo.style.transform = "scaleX(1)";
-         
-         previewOverlay.classList.add('active');
-         document.body.classList.add('showing-preview');
-         previewVideo.play().catch(()=>{});
-      }
-
-      function hidePreview() {
-         previewOverlay.classList.remove('active');
-         document.body.classList.remove('showing-preview');
-         previewVideo.pause();
-         previewVideo.src = '';
-         recordedBlob = null;
-         if(!mediaStream || !mediaStream.active) startCamera();
-      }
-
-      // --- LISTENERS ---
-      flashBtn.onclick = toggleFlash;
-
-      switchBtn.onclick = () => {
-         switchBtn.style.transform = "rotate(180deg)";
-         setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
-         facingMode = (facingMode === 'environment') ? 'user' : 'environment';
-         startCamera();
+      const tick = () => {
+         if (!isRecording) return;
+         const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
+         progressCircle.style.strokeDashoffset = circumference * (1 - p);
+         if (p < 1) progressInterval = requestAnimationFrame(tick);
+         else stopRecording();
       };
+      progressInterval = requestAnimationFrame(tick);
+    }
 
-      recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
+    function stopRecording() { if (isRecording && mediaRecorder) mediaRecorder.stop(); }
 
-      galleryBtn.onclick = () => galleryInput.click();
-      galleryInput.onchange = (e) => {
-         const file = e.target.files[0];
-         if(!file) return;
-         const v = document.createElement('video');
-         v.preload = 'metadata';
-         v.onloadedmetadata = () => {
-            if(v.duration > 61) { alert("Max 60s"); galleryInput.value=''; return; }
-            recordedBlob = file;
-            showPreview(file);
-            galleryInput.value = '';
-         };
-         v.src = URL.createObjectURL(file);
-      };
+    function finalizeRecording() {
+       if(progressInterval) cancelAnimationFrame(progressInterval);
+       document.body.classList.remove('recording');
+       progressCircle.style.strokeDashoffset = circumference;
+       if (torchEnabled) toggleFlash();
+       showPreview(recordedBlob);
+    }
 
-      restartBtn.onclick = hidePreview;
-      
-      nextBtn.onclick = () => {
-         const url = getUploadURL();
-         uploadOverlay.classList.add('active');
-         uploadText.textContent = "0%";
-         
-         if(!url || !recordedBlob) {
-            uploadText.textContent = "Erreur URL";
-            setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
-            return;
-         }
+    // --- PREVIEW (LECTURE) ---
+    function showPreview(blob) {
+       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
+       previewObjectURL = URL.createObjectURL(blob);
+       previewVideo.src = previewObjectURL;
+       
+       // ICI EST LA SOLUTION POUR L'EFFET MIROIR EN LECTURE
+       // Si c'était un SELFIE (user) -> On affiche en MIROIR (scaleX -1)
+       // Si c'était BACK (environment) -> On affiche NORMAL (scaleX 1)
+       if (recordedFacingMode === 'user') {
+           previewVideo.style.transform = "scaleX(-1)";
+       } else {
+           previewVideo.style.transform = "scaleX(1)";
+       }
+       
+       previewOverlay.classList.add('active');
+       document.body.classList.add('showing-preview');
+       previewVideo.play().catch(()=>{});
+    }
 
-         const xhr = new XMLHttpRequest();
-         xhr.open('PUT', url, true);
-         xhr.setRequestHeader('Content-Type', recordedBlob.type);
-         xhr.upload.onprogress = e => {
-            if(e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%";
-         };
-         xhr.onload = () => {
-            if(xhr.status < 300) {
-               uploadText.textContent = "Succès";
-               const assetId = url.split('/').pop().split('?')[0];
-               notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
-            } else {
-               uploadText.textContent = "Échec";
-               setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
-            }
-         };
-         xhr.send(recordedBlob);
-      };
-      
-      previewOverlay.onclick = (e) => {
-        if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
-           previewVideo.paused ? previewVideo.play() : previewVideo.pause();
-        }
-      };
+    function hidePreview() {
+       previewOverlay.classList.remove('active');
+       document.body.classList.remove('showing-preview');
+       previewVideo.pause();
+       previewVideo.src = '';
+       recordedBlob = null;
+       if(!mediaStream || !mediaStream.active) startCamera();
+    }
 
-      // INIT IMMEDIAT (Pas de DOMContentLoaded pour gagner du temps)
-      startCamera();
+    flashBtn.onclick = toggleFlash;
+    switchBtn.onclick = () => {
+       switchBtn.style.transform = "rotate(180deg)";
+       setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
+       facingMode = (facingMode === 'environment') ? 'user' : 'environment';
+       startCamera();
+    };
+    recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
+    galleryBtn.onclick = () => galleryInput.click();
+    
+    // Pour la galerie, on force le mode normal
+    galleryInput.onchange = (e) => {
+       const file = e.target.files[0];
+       if(!file) return;
+       const v = document.createElement('video');
+       v.preload = 'metadata';
+       v.onloadedmetadata = () => {
+          if(v.duration > 61) { alert("Max 60s"); galleryInput.value=''; return; }
+          recordedBlob = file;
+          recordedFacingMode = 'environment'; // Galerie = Toujours Normal
+          showPreview(file);
+          galleryInput.value = '';
+       };
+       v.src = URL.createObjectURL(file);
+    };
+    restartBtn.onclick = hidePreview;
+    nextBtn.onclick = () => {
+       const url = getUploadURL();
+       uploadOverlay.classList.add('active');
+       uploadText.textContent = "0%";
+       if(!url || !recordedBlob) {
+          uploadText.textContent = "Erreur"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); return;
+       }
+       const xhr = new XMLHttpRequest();
+       xhr.open('PUT', url, true);
+       xhr.setRequestHeader('Content-Type', recordedBlob.type);
+       xhr.upload.onprogress = e => { if(e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%"; };
+       xhr.onload = () => {
+          if(xhr.status < 300) {
+             uploadText.textContent = "Succès";
+             const assetId = url.split('/').pop().split('?')[0];
+             notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
+          } else { uploadText.textContent = "Échec"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); }
+       };
+       xhr.send(recordedBlob);
+    };
+    previewOverlay.onclick = (e) => {
+      if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
+         previewVideo.paused ? previewVideo.play() : previewVideo.pause();
+      }
+    };
+
+    // START
+    startCamera();
 
   </script>
 </body>
