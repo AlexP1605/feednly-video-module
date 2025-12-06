@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V25 (Fastest)</title>
+  <title>Camera Pro V26 (Duration Check)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -28,9 +28,7 @@
     
     video {
       width: 100%; height: 100%; object-fit: cover; display: block;
-      /* Pas d'opacité, pas de transition -> Affichage immédiat */
-      transform: scaleX(1); 
-      pointer-events: none;
+      transform: scaleX(1); pointer-events: none;
     }
     video::-webkit-media-controls { display: none !important; }
 
@@ -59,9 +57,8 @@
     
     .bottom-bar { 
       position: absolute; bottom: 0; width: 100%; 
-      /* MODIFICATION ICI : On réduit l'espace pour descendre les boutons */
-      /* 20px de marge + la safe area. C'est beaucoup plus bas qu'avant. */
-      padding: 0 30px calc(20px + env(safe-area-inset-bottom)) 30px; 
+      /* Espace généreux pour éviter le menu iOS */
+      padding: 0 30px calc(40px + env(safe-area-inset-bottom)) 30px; 
       display: flex; align-items: center; justify-content: space-between; 
       z-index: 30;
     }
@@ -80,11 +77,9 @@
     }
     .btn:active { transform: scale(0.9); }
     
-    /* FLASH ICONS */
     .btn.flash-on { border-color: var(--flash-active); }
     .btn.flash-on svg { fill: var(--flash-active); }
     
-    /* TIMER BTN */
     #timer-btn { position: absolute; right: 20px; width: auto; padding: 0 14px; border-radius: 24px; gap: 6px; }
     #timer-btn.active { background: rgba(255, 204, 0, 0.3); border-color: var(--active-timer); color: var(--active-timer); }
     #timer-btn svg { width: 20px; height: 20px; fill: currentColor; }
@@ -119,6 +114,17 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #upload-text { margin-top: 20px; color: #fff; font-weight: 600; font-size: 18px; }
 
+    /* --- ERROR TOAST (Notification) --- */
+    #error-toast {
+      position: fixed; top: 100px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      background: rgba(255, 59, 48, 0.9); border: 1px solid rgba(255,255,255,0.2);
+      color: white; padding: 12px 24px; border-radius: 30px;
+      font-weight: 600; font-size: 14px; z-index: 200;
+      opacity: 0; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none; text-align: center; width: 90%; max-width: 300px;
+    }
+    #error-toast.active { opacity: 1; transform: translateX(-50%) translateY(0); }
+
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
   </style>
@@ -126,6 +132,7 @@
 <body>
 
   <div id="countdown-display"></div>
+  <div id="error-toast">Erreur</div>
 
   <div id="camera-container">
     <video id="camera-preview" playsinline muted autoplay></video>
@@ -191,6 +198,7 @@
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
     const progressCircle = document.getElementById('record-progress-circle');
+    const errorToast = document.getElementById('error-toast');
 
     let mediaStream = null;
     let mediaRecorder = null;
@@ -208,11 +216,10 @@
     let timerDuration = 0; 
     let isCountingDown = false;
 
-    // PATHS
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
 
-    const MAX_DURATION = 60000;
+    const MAX_DURATION = 60000; // 60s
     const circumference = 2 * Math.PI * 46;
     let recordingStartTime = 0;
     let progressInterval = null;
@@ -231,6 +238,12 @@
        gain.gain.value = 0.1; 
        osc.start();
        osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    function showError(msg) {
+        errorToast.textContent = msg;
+        errorToast.classList.add('active');
+        setTimeout(() => { errorToast.classList.remove('active'); }, 3000);
     }
 
     function notifyHost(payload) {
@@ -317,11 +330,10 @@
     async function startCamera() {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
-      // --- OPTIMISATION VITESSE MAXIMALE ---
-      // On retire width/height ideal pour laisser le navigateur choisir la résolution native (beaucoup plus rapide)
+      // FASTEST CONFIG
       const constraints = {
         audio: true,
-        video: { facingMode: facingMode } 
+        video: { facingMode: facingMode }
       };
 
       try {
@@ -340,7 +352,7 @@
            const caps = track.getCapabilities ? track.getCapabilities() : {};
            torchSupported = !!caps.torch;
            updateFlashUI();
-        }, 200);
+        }, 300);
 
       } catch (error) { console.error(error); }
     }
@@ -427,20 +439,32 @@
     };
     galleryBtn.onclick = () => galleryInput.click();
     
+    // --- GESTION GALLERY ET DUREE ---
     galleryInput.onchange = (e) => {
        const file = e.target.files[0];
        if(!file) return;
+       
        const v = document.createElement('video');
        v.preload = 'metadata';
+       
        v.onloadedmetadata = () => {
-          if(v.duration > 61) { alert("Max 60s"); galleryInput.value=''; return; }
+          // CHECK DUREE
+          if(v.duration > 61) {
+              const sec = Math.round(v.duration);
+              showError(`Vidéo trop longue (${Math.floor(sec/60)}m${sec%60}s). Max 60s.`);
+              galleryInput.value = ''; // Reset
+              return;
+          }
+          
           recordedBlob = file;
           recordedFacingMode = 'environment';
           showPreview(file);
           galleryInput.value = '';
        };
+       
        v.src = URL.createObjectURL(file);
     };
+
     restartBtn.onclick = hidePreview;
     
     nextBtn.onclick = () => {
