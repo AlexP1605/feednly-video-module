@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V14 (Instant)</title>
+  <title>Camera Pro V15</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -41,13 +41,11 @@
       height: 100%;
       object-fit: cover;
       display: block;
-      background: #000;
-      /* PLUS D'OPACITÉ 0 ICI -> Affichage direct */
-      opacity: 1; 
-      pointer-events: none;
+      background: #000; /* Fond noir si pas d'image */
+      transform: scaleX(1); /* Par défaut : PAS DE MIROIR */
     }
     
-    /* Cache contrôles natifs */
+    /* Bloque les contrôles natifs */
     video::-webkit-media-controls { display: none !important; }
 
     /* --- PREVIEW SPLIT --- */
@@ -77,7 +75,8 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(1); /* Replay normal sans miroir */
+      transform: scaleX(1) !important; /* FORCE : Jamais de miroir en lecture */
+      pointer-events: none;
     }
 
     #preview-actions {
@@ -159,8 +158,7 @@
     .btn.flash-on { background: rgba(255, 215, 0, 0.25); border-color: #ffd700; }
     .btn.flash-on svg { fill: #ffd700; }
     
-    /* On enlève le style disabled strict pour laisser une chance au flash */
-    .btn.disabled { opacity: 0.5; pointer-events: auto; } 
+    .btn.disabled { opacity: 0.5; } 
     
     .btn svg { width: 24px; height: 24px; fill: white; }
 
@@ -315,8 +313,7 @@
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // --- DOM ---
+      // --- DOM VARIABLES ---
       const cameraPreview = document.getElementById('camera-preview');
       const previewVideo = document.getElementById('preview-video');
       const previewOverlay = document.getElementById('preview-overlay');
@@ -333,7 +330,7 @@
       const uploadText = document.getElementById('upload-text');
       const progressCircle = document.getElementById('record-progress-circle');
 
-      // --- VARS ---
+      // --- STATE ---
       let mediaStream = null;
       let mediaRecorder = null;
       let recordedChunks = [];
@@ -373,19 +370,16 @@
       function updateFlashUI() {
         const isBackCamera = facingMode === 'environment';
         
-        // Si ce n'est pas la caméra arrière, on grise
         if (!isBackCamera) {
            flashBtn.classList.add('disabled');
            flashBtn.classList.remove('flash-on');
-           return;
+        } else {
+           flashBtn.classList.remove('disabled');
+           flashBtn.classList.toggle('flash-on', torchEnabled);
         }
-
-        // Si c'est la caméra arrière, on active le bouton
-        flashBtn.classList.remove('disabled');
-        flashBtn.classList.toggle('flash-on', torchEnabled);
       }
 
-      // --- FLASH (ROBUSTE) ---
+      // --- FLASH ---
       async function toggleFlash() {
         if (!mediaStream || facingMode !== 'environment') return;
         
@@ -396,21 +390,16 @@
           await track.applyConstraints({ advanced: [{ torch: torchEnabled }] });
           updateFlashUI();
         } catch (err) {
-          console.log("Flash error", err);
-          // On ne revert pas l'état visuel tout de suite, certains téléphones 
-          // allument le flash même si l'API renvoie une erreur.
           updateFlashUI();
         }
       }
 
-      // --- CAMERA (INSTANT START) ---
+      // --- CAMERA (VITESSE MAXIMALE) ---
       async function startCamera() {
-        // 1. Coupure brutale pour éviter les conflits
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(t => t.stop());
-        }
+        // Stop flux précédent
+        if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
-        // 2. Configuration : Large pour dézoomer
+        // Résolution Paysage pour Dézoom
         const constraints = {
           audio: true,
           video: { 
@@ -423,28 +412,25 @@
         try {
           mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
           cameraPreview.srcObject = mediaStream;
-          
-          // Lancement immédiat sans fioritures
-          cameraPreview.play().catch(e => console.log(e));
 
-          // 3. Gestion Miroir
-          if(facingMode === 'user') cameraPreview.style.transform = "scaleX(-1)";
-          else cameraPreview.style.transform = "scaleX(1)";
+          // GESTION MIROIR
+          // Back Camera : scaleX(1) -> PAS DE MIROIR (Réalité)
+          // Front Camera : scaleX(-1) -> MIROIR (Selfie)
+          if(facingMode === 'user') {
+             cameraPreview.style.transform = "scaleX(-1)";
+          } else {
+             cameraPreview.style.transform = "scaleX(1)";
+          }
 
-          // 4. Détection Flash
-          torchEnabled = false;
-          updateFlashUI();
-          
-          // Petit délai pour laisser le hardware se caler avant de checker le support torch
+          // Détection Flash différée pour stabilité
           setTimeout(() => {
              const track = mediaStream.getVideoTracks()[0];
              const caps = track.getCapabilities ? track.getCapabilities() : {};
              torchSupported = !!caps.torch;
              updateFlashUI();
-          }, 500);
+          }, 300);
 
         } catch (error) {
-          console.error("Camera fail", error);
           notifyHost({ status: 'error', message: 'Camera start failed' });
         }
       }
@@ -494,7 +480,7 @@
          document.body.classList.remove('recording');
          progressCircle.style.strokeDashoffset = circumference;
          
-         if (torchEnabled) toggleFlash(); // Eteindre flash
+         if (torchEnabled) toggleFlash();
          showPreview(recordedBlob);
       }
 
@@ -504,7 +490,7 @@
          previewObjectURL = URL.createObjectURL(blob);
          previewVideo.src = previewObjectURL;
          
-         // Lecture NORMALE (pas de miroir) - C'est ici que ça corrige la gauche/droite
+         // IMPORTANTE : On force le mode NORMAL (Réalité) pour la lecture
          previewVideo.style.transform = "scaleX(1)";
          
          previewOverlay.classList.add('active');
@@ -586,9 +572,9 @@
         }
       };
 
-      // INIT
+      // INIT IMMEDIAT (Pas de DOMContentLoaded pour gagner du temps)
       startCamera();
-    });
+
   </script>
 </body>
 </html>
