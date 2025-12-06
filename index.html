@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V28 (Native Fix)</title>
+  <title>Camera Pro V29 (iOS Call Fix)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -23,7 +23,7 @@
       position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden;
     }
 
-    /* --- CAMERA (FOND) --- */
+    /* --- CAMERA --- */
     #camera-container { position: absolute; inset: 0; z-index: 1; background: #000; }
     
     video {
@@ -32,7 +32,7 @@
     }
     video::-webkit-media-controls { display: none !important; }
 
-    /* --- CONTROLS (INTERFACE) --- */
+    /* --- CONTROLS --- */
     .controls { 
         position: absolute; inset: 0; z-index: 20; 
         pointer-events: none; 
@@ -55,7 +55,6 @@
     }
 
     /* --- PREVIEW UI (REPLAY) --- */
-    /* Z-INDEX 1000 POUR ETRE SUR QU'IL EST DEVANT TOUT */
     #preview-overlay { 
       position: fixed; inset: 0; z-index: 1000; 
       background: #000; 
@@ -83,7 +82,6 @@
       z-index: 1001; pointer-events: auto; 
     }
 
-    /* --- IMPORTANT : CACHE LES BOUTONS QUAND PREVIEW ACTIVE --- */
     body.showing-preview .controls { display: none !important; }
     body.showing-preview #camera-container { opacity: 0; } 
 
@@ -102,7 +100,6 @@
       transition: all 0.2s;
     }
     .btn:active { transform: scale(0.9); }
-    
     .btn.flash-on { border-color: var(--flash-active); }
     .btn.flash-on svg { fill: var(--flash-active); }
     
@@ -241,6 +238,7 @@
     let timerDuration = 0; 
     let isCountingDown = false;
     let checkGalleryDuration = false;
+    let isWaitingForReturn = false; // Pour savoir si on attend le retour du menu iOS
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -446,13 +444,9 @@
            else previewVideo.style.transform = "scaleX(1)";
        }
        
-       // FORCE L'AFFICHAGE ET CACHE LES BOUTONS
        document.body.classList.add('showing-preview');
        previewOverlay.classList.add('active');
        
-       // STOP LE FLUX CAMERA POUR ECONOMISER
-       // if(mediaStream) mediaStream.getTracks().forEach(t => t.stop()); 
-
        previewVideo.play().catch(()=>{});
     }
 
@@ -462,6 +456,7 @@
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
+       isWaitingForReturn = false; // Reset
        startCamera();
     }
 
@@ -483,11 +478,39 @@
        facingMode = (facingMode === 'environment') ? 'user' : 'environment';
        startCamera();
     };
-    galleryBtn.onclick = () => galleryInput.click();
+    
+    // --- GESTION GALLERY ET APPEL IOS ---
+    galleryBtn.onclick = () => {
+       // FIX CRITIQUE IOS : On coupe le flux pour éviter l'erreur "Appel actif"
+       if(mediaStream) {
+           mediaStream.getTracks().forEach(track => track.stop());
+           mediaStream = null;
+       }
+       isWaitingForReturn = true; // On note qu'on a ouvert le menu
+       galleryInput.click();
+    };
+    
+    // SI L'UTILISATEUR ANNULE DANS LE MENU IOS, ON RELANCE LA CAM
+    // On utilise le focus de la fenêtre pour détecter le retour
+    window.onfocus = () => {
+        if (isWaitingForReturn && !recordedBlob) {
+            // Petit délai pour laisser le temps à onchange de se déclencher si un fichier a été choisi
+            setTimeout(() => {
+                if (!recordedBlob) {
+                    isWaitingForReturn = false;
+                    startCamera();
+                }
+            }, 500);
+        }
+    };
     
     galleryInput.onchange = (e) => {
+       isWaitingForReturn = false; // On a bien reçu un fichier
        const file = e.target.files[0];
-       if(!file) return;
+       if(!file) {
+           startCamera(); // Annulation, on relance
+           return;
+       }
        recordedBlob = file;
        checkGalleryDuration = true; 
        showPreview(file);
