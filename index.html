@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V24 (No Black Screen)</title>
+  <title>Camera Pro V25 (Fastest)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -11,7 +11,6 @@
       --primary: #ff3b30;
       --active-timer: #ffcc00;
       --flash-active: #ffcc00;
-      --black-bar: #000000;
     }
 
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-touch-callout: none; }
@@ -29,29 +28,11 @@
     
     video {
       width: 100%; height: 100%; object-fit: cover; display: block;
-      background: #000; 
+      /* Pas d'opacité, pas de transition -> Affichage immédiat */
       transform: scaleX(1); 
       pointer-events: none;
-      opacity: 0; /* Caché par défaut */
-      transition: opacity 0.4s ease-in-out; /* Apparition douce */
     }
-    
-    video.ready { opacity: 1; }
     video::-webkit-media-controls { display: none !important; }
-
-    /* --- LOADER (SPINNER) --- */
-    #camera-loader {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 50px; height: 50px;
-      border: 4px solid rgba(255,255,255,0.2);
-      border-top: 4px solid #fff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      z-index: 5; /* Au dessus de la vidéo, en dessous des contrôles */
-      display: none; /* Caché par défaut, activé par JS */
-    }
-    #camera-loader.active { display: block; }
 
     /* --- COUNTDOWN --- */
     #countdown-display {
@@ -71,14 +52,16 @@
     .top-bar { 
       position: absolute; top: 0; width: 100%; 
       padding-top: max(20px, env(safe-area-inset-top));
-      height: 100px;
+      height: 80px;
       display: flex; justify-content: center; align-items: center; 
       pointer-events: auto;
     }
     
     .bottom-bar { 
       position: absolute; bottom: 0; width: 100%; 
-      padding: 0 30px calc(60px + env(safe-area-inset-bottom)) 30px; 
+      /* MODIFICATION ICI : On réduit l'espace pour descendre les boutons */
+      /* 20px de marge + la safe area. C'est beaucoup plus bas qu'avant. */
+      padding: 0 30px calc(20px + env(safe-area-inset-bottom)) 30px; 
       display: flex; align-items: center; justify-content: space-between; 
       z-index: 30;
     }
@@ -97,9 +80,11 @@
     }
     .btn:active { transform: scale(0.9); }
     
+    /* FLASH ICONS */
     .btn.flash-on { border-color: var(--flash-active); }
     .btn.flash-on svg { fill: var(--flash-active); }
     
+    /* TIMER BTN */
     #timer-btn { position: absolute; right: 20px; width: auto; padding: 0 14px; border-radius: 24px; gap: 6px; }
     #timer-btn.active { background: rgba(255, 204, 0, 0.3); border-color: var(--active-timer); color: var(--active-timer); }
     #timer-btn svg { width: 20px; height: 20px; fill: currentColor; }
@@ -122,7 +107,7 @@
     #preview-overlay.active { display: flex; opacity: 1; }
     .preview-video-container { flex: 1; position: relative; overflow: hidden; border-bottom-left-radius: 24px; border-bottom-right-radius: 24px; background: #000; }
     #preview-video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
-    #preview-actions { height: 110px; min-height: 110px; background: var(--black-bar); display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; }
+    #preview-actions { height: 110px; min-height: 110px; background: #000; display: flex; align-items: center; justify-content: center; gap: 15px; padding: 0 24px; z-index: 60; pointer-events: auto; }
     .action-btn { flex: 1; height: 54px; font-size: 16px; font-weight: 700; border: none; cursor: pointer; border-radius: 14px; }
     #restart-button { background: #1c1c1e; color: #fff; border: 1px solid #333; }
     #next-button { background: #fff; color: #000; }
@@ -140,7 +125,6 @@
 </head>
 <body>
 
-  <div id="camera-loader" class="active"></div>
   <div id="countdown-display"></div>
 
   <div id="camera-container">
@@ -207,7 +191,6 @@
     const uploadOverlay = document.getElementById('upload-overlay');
     const uploadText = document.getElementById('upload-text');
     const progressCircle = document.getElementById('record-progress-circle');
-    const loader = document.getElementById('camera-loader');
 
     let mediaStream = null;
     let mediaRecorder = null;
@@ -332,29 +315,19 @@
     }
 
     async function startCamera() {
-      // Afficher le loader et cacher la vidéo
-      loader.classList.add('active');
-      cameraPreview.classList.remove('ready');
-
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
-      // Optimisation : ideal 1920 c'est bien, mais on accepte moins pour charger vite
+      // --- OPTIMISATION VITESSE MAXIMALE ---
+      // On retire width/height ideal pour laisser le navigateur choisir la résolution native (beaucoup plus rapide)
       const constraints = {
         audio: true,
-        video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        video: { facingMode: facingMode } 
       };
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         cameraPreview.srcObject = mediaStream;
-        
-        // Attendre que ça joue vraiment
-        cameraPreview.onplaying = () => {
-            loader.classList.remove('active'); // Cacher le loader
-            cameraPreview.classList.add('ready'); // Afficher la vidéo en fondu
-        };
-        
         cameraPreview.play().catch(e=>{});
         
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
@@ -363,144 +336,4 @@
         updateFlashUI();
         
         setTimeout(() => {
-           const track = mediaStream.getVideoTracks()[0];
-           const caps = track.getCapabilities ? track.getCapabilities() : {};
-           torchSupported = !!caps.torch;
-           updateFlashUI();
-        }, 500);
-
-      } catch (error) {
-        console.error(error);
-        loader.classList.remove('active');
-      }
-    }
-
-    recordBtn.onclick = () => {
-      if (isRecording) {
-        stopRecording();
-      } else {
-        if (timerDuration > 0) startCountdownAndRecord();
-        else startRecording();
-      }
-    };
-
-    async function startRecording() {
-      if (!mediaStream || !mediaStream.active) await startCamera();
-      if (isRecording) return;
-      
-      recordedFacingMode = facingMode; 
-      recordedChunks = [];
-      let options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
-      try { mediaRecorder = new MediaRecorder(mediaStream, options); }
-      catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
-
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = () => {
-         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-         isRecording = false;
-         finalizeRecording();
-      };
-      mediaRecorder.start();
-      isRecording = true;
-      document.body.classList.add('recording');
-      
-      recordingStartTime = Date.now();
-      progressCircle.style.strokeDashoffset = circumference;
-      const tick = () => {
-         if (!isRecording) return;
-         const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
-         progressCircle.style.strokeDashoffset = circumference * (1 - p);
-         if (p < 1) progressInterval = requestAnimationFrame(tick);
-         else stopRecording();
-      };
-      progressInterval = requestAnimationFrame(tick);
-    }
-
-    function stopRecording() { if (isRecording && mediaRecorder) mediaRecorder.stop(); }
-
-    function finalizeRecording() {
-       if(progressInterval) cancelAnimationFrame(progressInterval);
-       document.body.classList.remove('recording');
-       progressCircle.style.strokeDashoffset = circumference;
-       if (torchEnabled) toggleFlash();
-       showPreview(recordedBlob);
-    }
-
-    function showPreview(blob) {
-       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
-       previewObjectURL = URL.createObjectURL(blob);
-       previewVideo.src = previewObjectURL;
-       
-       if (recordedFacingMode === 'user') previewVideo.style.transform = "scaleX(-1)";
-       else previewVideo.style.transform = "scaleX(1)";
-       
-       previewOverlay.classList.add('active');
-       document.body.classList.add('showing-preview');
-       previewVideo.play().catch(()=>{});
-    }
-
-    function hidePreview() {
-       previewOverlay.classList.remove('active');
-       document.body.classList.remove('showing-preview');
-       previewVideo.pause();
-       previewVideo.src = '';
-       recordedBlob = null;
-       if(!mediaStream || !mediaStream.active) startCamera();
-    }
-
-    flashBtn.onclick = toggleFlash;
-    switchBtn.onclick = () => {
-       switchBtn.style.transform = "rotate(180deg)";
-       setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
-       facingMode = (facingMode === 'environment') ? 'user' : 'environment';
-       startCamera();
-    };
-    galleryBtn.onclick = () => galleryInput.click();
-    
-    galleryInput.onchange = (e) => {
-       const file = e.target.files[0];
-       if(!file) return;
-       const v = document.createElement('video');
-       v.preload = 'metadata';
-       v.onloadedmetadata = () => {
-          if(v.duration > 61) { alert("Max 60s"); galleryInput.value=''; return; }
-          recordedBlob = file;
-          recordedFacingMode = 'environment';
-          showPreview(file);
-          galleryInput.value = '';
-       };
-       v.src = URL.createObjectURL(file);
-    };
-    restartBtn.onclick = hidePreview;
-    
-    nextBtn.onclick = () => {
-       const url = getUploadURL();
-       uploadOverlay.classList.add('active');
-       uploadText.textContent = "0%";
-       if(!url || !recordedBlob) {
-          uploadText.textContent = "Erreur"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); return;
-       }
-       const xhr = new XMLHttpRequest();
-       xhr.open('PUT', url, true);
-       xhr.setRequestHeader('Content-Type', recordedBlob.type);
-       xhr.upload.onprogress = e => { if(e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%"; };
-       xhr.onload = () => {
-          if(xhr.status < 300) {
-             uploadText.textContent = "Succès";
-             const assetId = url.split('/').pop().split('?')[0];
-             notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
-          } else { uploadText.textContent = "Échec"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); }
-       };
-       xhr.send(recordedBlob);
-    };
-    previewOverlay.onclick = (e) => {
-      if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
-         previewVideo.paused ? previewVideo.play() : previewVideo.pause();
-      }
-    };
-
-    startCamera();
-
-  </script>
-</body>
-</html>
+           const track = mediaStream.getVideoTracks()
