@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V36 (Menu iOS & Mic Fix)</title>
+  <title>Camera Pro V37 (Optimisation & Fluidité)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -132,7 +132,6 @@
     }
     #error-toast.active { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-    /* IMPORTANT : Pas de capture="environment" pour avoir le menu iOS */
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
   </style>
@@ -239,6 +238,24 @@
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     let audioCtx = new AudioContext();
+
+    // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            // Stop tout si l'utilisateur change d'onglet ou quitte l'app (pour économiser CPU/GPU)
+            if (!isRecording && !isCountingDown) {
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                    mediaStream = null;
+                }
+            }
+        } else {
+            // Redémarrer la caméra quand l'utilisateur revient
+            if (!mediaStream && !isRecording && !isCountingDown) {
+                startCamera();
+            }
+        }
+    });
 
     function playBeep(freq = 800, type = 'short') {
        if (!audioCtx) return;
@@ -354,7 +371,7 @@
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       
       const constraints = {
-        audio: true, // On démarre avec le micro par défaut
+        audio: true, // On démarre avec le micro
         video: { 
             facingMode: facingMode,
             width: { ideal: 1920, max: 1920 },
@@ -401,8 +418,7 @@
     };
 
     async function startRecording() {
-      // Sécurité : On vérifie si on a toujours le micro
-      // Si on vient de la galerie, le micro a été coupé, donc on relance la caméra proprement
+      // Sécurité : Si le micro a été coupé (par la galerie) ou si le flux est éteint (par visiblitychange), on relance
       if (!mediaStream || !mediaStream.active || mediaStream.getAudioTracks().length === 0) {
            await startCamera();
       }
@@ -489,7 +505,6 @@
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
-       // Si on avait coupé le micro ou perdu le flux, startCamera le remet d'équerre
        startCamera();
     }
 
@@ -512,7 +527,7 @@
        startCamera();
     };
     
-    // --- CORRECTION CLÉ : Juste couper le micro, pas la vidéo ---
+    // --- Galerie: Coupe micro, garde vidéo, ouvre menu ---
     galleryBtn.onclick = () => {
        if (mediaStream) {
            // On coupe uniquement les pistes AUDIO pour éviter le conflit "En appel"
@@ -521,14 +536,13 @@
                mediaStream.removeTrack(track);
            });
        }
-       // On ouvre le menu (sans capture="environment", donc menu iOS complet)
        galleryInput.click();
     };
     
     function handleFileSelect(e) {
        const file = e.target.files[0];
        if(!file) {
-           // Si on annule, on s'assure que le micro revient si on veut filmer après
+           // Si on annule, on redémarre la caméra (pour reprendre le micro)
            startCamera();
            return;
        }
