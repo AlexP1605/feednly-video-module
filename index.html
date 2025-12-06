@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V32 (Button Fix)</title>
+  <title>Camera Pro V34 (Limit 1080p)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -87,19 +87,17 @@
     .btn svg { width: 24px; height: 24px; fill: white; transition: fill 0.2s; }
 
     /* --- RECORD BUTTON (ZONE AGRANDIE) --- */
-    /* Correction : pointer-events auto sur le wrap pour capter le clic large */
     .record-wrap { 
       position: relative; width: 90px; height: 90px; 
       display: flex; align-items: center; justify-content: center; 
       pointer-events: auto; cursor: pointer; 
-      /* Supprime le highlight bleu sur mobile */
       -webkit-tap-highlight-color: transparent;
     }
     
     .record-progress { position: absolute; inset: -3px; width: 96px; height: 96px; transform: rotate(-90deg); pointer-events: none; }
     .record-progress circle { fill: none; stroke: var(--primary); stroke-width: 5px; stroke-linecap: round; stroke-dasharray: 0 999; transition: stroke-dashoffset 0.1s linear; }
     
-    .record-button { width: 72px; height: 72px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; pointer-events: none; /* Le clic est géré par le wrap */ }
+    .record-button { width: 72px; height: 72px; border-radius: 50%; background: #fff; border: 4px solid rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; transition: all 0.2s; pointer-events: none; }
     
     body.recording .record-button { background: var(--primary); transform: scale(1.15); border-color: rgba(255,255,255,0.6); animation: pulse 1.5s infinite; }
     body.recording .record-inner { width: 35%; height: 35%; background: #fff; border-radius: 6px; }
@@ -123,7 +121,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     #upload-text { margin-top: 20px; color: #fff; font-weight: 600; font-size: 18px; }
 
-    /* --- ERROR TOAST (Notification) --- */
+    /* --- ERROR TOAST --- */
     #error-toast {
       position: fixed; top: 100px; left: 50%; transform: translateX(-50%) translateY(-20px);
       background: rgba(255, 59, 48, 0.9); border: 1px solid rgba(255,255,255,0.2);
@@ -193,7 +191,7 @@
     const cameraPreview = document.getElementById('camera-preview');
     const previewVideo = document.getElementById('preview-video');
     const previewOverlay = document.getElementById('preview-overlay');
-    const recordWrapBtn = document.getElementById('record-wrap-btn'); // Clic sur le wrap
+    const recordWrapBtn = document.getElementById('record-wrap-btn');
     const flashBtn = document.getElementById('flash-btn');
     const flashIconPath = document.getElementById('flash-icon-path');
     const switchBtn = document.getElementById('switch-btn');
@@ -225,8 +223,6 @@
     let timerDuration = 0; 
     let isCountingDown = false;
     let shouldCheckDuration = false;
-    
-    // NEW: Lock to prevent double tap issues
     let isToggleLocked = false;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
@@ -355,7 +351,18 @@
 
     async function startCamera() {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-      const constraints = { audio: true, video: { facingMode: facingMode } };
+      
+      // CONFIGURATION 1080P STRICTE (PAS DE 4K)
+      const constraints = {
+        audio: true,
+        video: { 
+            facingMode: facingMode,
+            // On vise 1080p, et on INTERDIT de dépasser cette valeur
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 }
+        }
+      };
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
@@ -377,13 +384,10 @@
       } catch (error) { console.error(error); }
     }
 
-    // --- LOGIQUE DU BOUTON RECORD ROBUSTE ---
+    // --- LOGIQUE BOUTON ROBUSTE ---
     recordWrapBtn.onclick = (e) => {
-      e.stopPropagation(); // Empêche les clics fantômes
-
-      if (isToggleLocked) return; // Anti-Spam
-      
-      // Verrouillage temporaire (300ms) pour éviter double clic
+      e.stopPropagation();
+      if (isToggleLocked) return;
       isToggleLocked = true;
       setTimeout(() => { isToggleLocked = false; }, 300);
 
@@ -399,13 +403,21 @@
 
     async function startRecording() {
       if (!mediaStream || !mediaStream.active) await startCamera();
-      
-      // Double check pour éviter de lancer 2 fois
       if (isRecording) return;
       
       recordedFacingMode = facingMode; 
       recordedChunks = [];
-      let options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
+      
+      // OPTION QUALITÉ (2.5 Mbps)
+      let options = {
+         mimeType: 'video/mp4',
+         videoBitsPerSecond: 2500000 
+      };
+      
+      if (!MediaRecorder.isTypeSupported('video/mp4')) {
+          options = { videoBitsPerSecond: 2500000 };
+      }
+
       try { mediaRecorder = new MediaRecorder(mediaStream, options); }
       catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
 
@@ -416,7 +428,6 @@
          finalizeRecording();
       };
       
-      // Start
       mediaRecorder.start();
       isRecording = true;
       document.body.classList.add('recording');
@@ -435,12 +446,9 @@
     }
 
     function stopRecording() {
-       // Sécurité : On vérifie que le recorder est bien en train d'enregistrer
        if (mediaRecorder && mediaRecorder.state === 'recording') {
            mediaRecorder.stop();
        } else if (isRecording) {
-           // Cas rare : Flag isRecording true mais recorder arrêté/inactif
-           // On force la finalisation manuelle
            isRecording = false;
            finalizeRecording();
        }
@@ -452,10 +460,7 @@
        progressCircle.style.strokeDashoffset = circumference;
        if (torchEnabled) toggleFlash();
        shouldCheckDuration = false;
-       // Petit délai pour s'assurer que le Blob est prêt
-       setTimeout(() => {
-           if(recordedBlob) showPreview(recordedBlob);
-       }, 100);
+       setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
     }
 
     function showPreview(blob) {
