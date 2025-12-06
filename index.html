@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V38 (Fluidité Recommencer & Audio Final Fix)</title>
+  <title>Camera Pro V39 (Stabilisation Record)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -224,6 +224,7 @@
     let isCountingDown = false;
     let shouldCheckDuration = false;
     let isToggleLocked = false;
+    let isSwitching = false; // NEW: Verrou pour le switch
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -354,12 +355,11 @@
       const interval = setInterval(() => {
         count--;
         
-        // --- CORRECTION BIP AUDIO : Bip final sur 1 (avant le lancement) ---
+        // Bip final sur 1 pour qu'il ne soit PAS enregistré
         if (count > 1) { 
           countdownDisplay.textContent = count;
           playBeep(1000, 'short');
         } else if (count === 1) {
-          // Bip final (action) sur le chiffre 1 pour qu'il ne soit PAS enregistré
           countdownDisplay.textContent = count;
           playBeep(1500, 'long'); 
         } else {
@@ -373,9 +373,9 @@
       }, 1000);
     }
 
-    // Fonction pour redémarrer le flux de la caméra
+    // Fonction pour redémarrer/acquérir le flux de la caméra
     async function startCamera() {
-      // S'assurer que les anciens flux sont coupés (pour une nouvelle acquisition propre)
+      // NEW: Stop toutes les pistes si le stream existe (nécessaire avant de changer de caméra ou relancer après une erreur)
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       
       const constraints = {
@@ -391,10 +391,9 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         
-        // --- CORRECTION CLÉ POUR ÉVITER LE FREEZE (RECHARGEMENT) ---
+        // Vider la source puis la redéfinir force le rechargement
         cameraPreview.srcObject = null;
         cameraPreview.srcObject = mediaStream;
-        // --- FIN DE LA CORRECTION ---
         
         cameraPreview.play().catch(e=>{});
         
@@ -413,6 +412,23 @@
       } catch (error) { console.error(error); }
     }
 
+    // NEW: Fonction pour ajouter une piste audio au flux V/A existant
+    async function addAudioTrack(currentStream) {
+        if (!navigator.mediaDevices || !currentStream) return false;
+        try {
+            // Acquérir seulement le micro
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            const audioTrack = audioStream.getAudioTracks()[0];
+            
+            // Ajouter cette piste au flux vidéo existant
+            currentStream.addTrack(audioTrack);
+            return true;
+        } catch (error) {
+            console.error("Erreur lors de l'ajout du micro:", error);
+            return false;
+        }
+    }
+    
     // --- LOGIQUE BOUTON ROBUSTE ---
     recordWrapBtn.onclick = (e) => {
       e.stopPropagation();
@@ -431,12 +447,31 @@
     };
 
     async function startRecording() {
-      // Sécurité : Si le micro a été coupé (par la galerie) ou si le flux est éteint (par visiblitychange), on relance
-      if (!mediaStream || !mediaStream.active || mediaStream.getAudioTracks().length === 0) {
-           await startCamera();
+      // 1. Vérifier si le micro est manquant
+      const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
+
+      if (audioMissing) {
+        
+        // NEW: Tentative d'ajouter le micro au flux vidéo existant (si possible)
+        const videoExists = mediaStream && mediaStream.getVideoTracks().length > 0;
+        
+        if (videoExists) {
+            const added = await addAudioTrack(mediaStream);
+            if (!added) {
+                // Si l'ajout échoue, on relance le flux complet (fallback lourd)
+                await startCamera();
+            }
+        } else {
+             // Si pas de flux du tout, relance complète
+             await startCamera();
+        }
       }
       
-      if (isRecording) return;
+      // Sécurité finale
+      if (isRecording || !mediaStream || mediaStream.getAudioTracks().length === 0) {
+          showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
+          return;
+      }
       
       recordedFacingMode = facingMode; 
       recordedChunks = [];
@@ -519,12 +554,10 @@
        previewVideo.src = '';
        recordedBlob = null;
        
-       // --- CORRECTION FLUIDITÉ : Ne pas appeler startCamera ici ---
        // Le flux vidéo doit rester actif. On redémarre seulement si le flux a été coupé
        if (!mediaStream || !mediaStream.active) {
            startCamera();
        }
-       // --- FIN DE LA CORRECTION ---
     }
 
     previewVideo.onloadedmetadata = () => {
@@ -537,14 +570,29 @@
             shouldCheckDuration = false;
         }
     };
-
-    flashBtn.onclick = toggleFlash;
+    
+    // NEW: Fonction de basculement améliorée
     switchBtn.onclick = () => {
+       if (isRecording || isCountingDown || isSwitching) return;
+       isSwitching = true;
+       
        switchBtn.style.transform = "rotate(180deg)";
-       setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
+       
+       // Stop l'ancien flux proprement (sinon iOS/Android freeze au changement)
+       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+       
+       // Change de face
        facingMode = (facingMode === 'environment') ? 'user' : 'environment';
-       startCamera();
+       
+       startCamera().then(() => {
+          setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
+          isSwitching = false;
+       }).catch(() => {
+          isSwitching = false;
+       });
     };
+    
+    flashBtn.onclick = toggleFlash;
     
     // --- Galerie: Coupe micro, garde vidéo, ouvre menu ---
     galleryBtn.onclick = () => {
