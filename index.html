@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V20 (Sound + Layout)</title>
+  <title>Camera Pro V21 (Icons & Layout)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
       --glass-border: rgba(255, 255, 255, 0.2);
       --primary: #ff3b30;
       --active-timer: #ffcc00;
+      --flash-active: #ffcc00;
       --black-bar: #000000;
     }
 
@@ -45,23 +46,20 @@
     /* --- CONTROLS --- */
     .controls { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
     
-    /* TOP BAR : Flash au milieu, Timer à droite */
     .top-bar { 
       position: absolute; top: 0; width: 100%; 
-      padding-top: max(20px, env(safe-area-inset-top)); /* Support encoche */
+      padding-top: max(20px, env(safe-area-inset-top));
       height: 100px;
-      display: flex; 
-      justify-content: center; /* Centre le Flash */
-      align-items: center; 
+      display: flex; justify-content: center; align-items: center; 
       pointer-events: auto;
     }
     
-    /* BOTTOM BAR : Remontée pour éviter la barre iPhone */
     .bottom-bar { 
       position: absolute; bottom: 0; width: 100%; 
-      /* On remonte de 70px pour dégager le bas de l'écran */
-      padding: 0 30px 70px 30px; 
+      /* J'ai augmenté ici à 90px pour remonter les boutons */
+      padding: 0 30px 90px 30px; 
       display: flex; align-items: center; justify-content: space-between; 
+      z-index: 30; /* Assure que c'est au dessus */
     }
 
     body.recording .top-bar, body.recording .bottom-bar .side { opacity: 0; pointer-events: none; }
@@ -77,22 +75,17 @@
       transition: all 0.2s;
     }
     .btn:active { transform: scale(0.9); }
-    .btn.flash-on { background: rgba(255, 215, 0, 0.25); border-color: #ffd700; }
-    .btn.flash-on svg { fill: #ffd700; }
     
-    /* Bouton Flash (Centré par défaut) */
-    #flash-btn { z-index: 5; }
-
-    /* Bouton Timer (Positionné Absolument à Droite) */
-    #timer-btn { 
-      position: absolute; right: 20px; 
-      width: auto; padding: 0 14px; border-radius: 24px; gap: 6px; 
-    }
+    /* STYLE FLASH ACTIF : Juste la couleur de l'icone, pas de fond */
+    .btn.flash-on { border-color: var(--flash-active); }
+    .btn.flash-on svg { fill: var(--flash-active); }
+    
+    #timer-btn { position: absolute; right: 20px; width: auto; padding: 0 14px; border-radius: 24px; gap: 6px; }
     #timer-btn.active { background: rgba(255, 204, 0, 0.3); border-color: var(--active-timer); color: var(--active-timer); }
     #timer-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
     .btn.disabled { opacity: 0.5; } 
-    .btn svg { width: 24px; height: 24px; fill: white; }
+    .btn svg { width: 24px; height: 24px; fill: white; transition: fill 0.2s; }
 
     /* --- RECORD BUTTON --- */
     .record-wrap { position: relative; width: 84px; height: 84px; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
@@ -135,7 +128,7 @@
     <div class="controls">
       <div class="top-bar">
         <button type="button" class="btn" id="flash-btn">
-          <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"></path></svg>
+          <svg viewBox="0 0 24 24"><path id="flash-icon-path" d="M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z"></path></svg>
         </button>
 
         <button type="button" class="btn" id="timer-btn">
@@ -181,6 +174,7 @@
     const previewOverlay = document.getElementById('preview-overlay');
     const recordBtn = document.getElementById('record-btn');
     const flashBtn = document.getElementById('flash-btn');
+    const flashIconPath = document.getElementById('flash-icon-path'); // Path SVG
     const switchBtn = document.getElementById('switch-btn');
     const timerBtn = document.getElementById('timer-btn');
     const timerText = document.getElementById('timer-text');
@@ -209,6 +203,10 @@
     let timerDuration = 0; 
     let isCountingDown = false;
 
+    // SVG PATHS
+    const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
+    const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
+
     const MAX_DURATION = 60000;
     const circumference = 2 * Math.PI * 46;
     let recordingStartTime = 0;
@@ -217,7 +215,6 @@
     progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
     progressCircle.style.strokeDashoffset = circumference;
 
-    // --- AUDIO CONTEXT (BIP) ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playBeep() {
        if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -225,8 +222,8 @@
        const gain = audioCtx.createGain();
        osc.connect(gain);
        gain.connect(audioCtx.destination);
-       osc.frequency.value = 800; // Fréquence Bip
-       gain.gain.value = 0.1; // Volume bas
+       osc.frequency.value = 800; 
+       gain.gain.value = 0.1; 
        osc.start();
        osc.stop(audioCtx.currentTime + 0.1);
     }
@@ -246,14 +243,26 @@
       return u;
     }
 
+    // Gestion de l'UI du flash
     function updateFlashUI() {
       const isBack = facingMode === 'environment';
+      
+      // Si pas supporté ou camera avant : Barré et grisé
       if (!isBack) {
          flashBtn.classList.add('disabled');
          flashBtn.classList.remove('flash-on');
+         flashIconPath.setAttribute('d', PATH_FLASH_OFF);
+         return;
+      } 
+      
+      flashBtn.classList.remove('disabled');
+
+      if (torchEnabled) {
+         flashBtn.classList.add('flash-on');
+         flashIconPath.setAttribute('d', PATH_FLASH_ON); // Eclair plein
       } else {
-         flashBtn.classList.remove('disabled');
-         flashBtn.classList.toggle('flash-on', torchEnabled);
+         flashBtn.classList.remove('flash-on');
+         flashIconPath.setAttribute('d', PATH_FLASH_OFF); // Eclair barré
       }
     }
 
@@ -266,7 +275,6 @@
       updateFlashUI();
     }
 
-    // --- TIMER LOGIC ---
     timerBtn.onclick = () => {
       if (isRecording || isCountingDown) return;
       if (timerDuration === 0) timerDuration = 5;
@@ -291,13 +299,13 @@
 
       countdownDisplay.textContent = count;
       countdownDisplay.classList.add('active');
-      playBeep(); // Premier bip
+      playBeep();
 
       const interval = setInterval(() => {
         count--;
         if (count > 0) {
           countdownDisplay.textContent = count;
-          playBeep(); // Bip suivants
+          playBeep();
         } else {
           clearInterval(interval);
           countdownDisplay.classList.remove('active');
@@ -308,7 +316,6 @@
       }, 1000);
     }
 
-    // --- CAMERA START ---
     async function startCamera() {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
@@ -353,7 +360,7 @@
       if (!mediaStream || !mediaStream.active) await startCamera();
       if (isRecording) return;
       
-      recordedFacingMode = facingMode; // Mémorise la cam pour le miroir
+      recordedFacingMode = facingMode; 
 
       recordedChunks = [];
       let options = MediaRecorder.isTypeSupported('video/mp4') ? { mimeType: 'video/mp4' } : {};
@@ -466,7 +473,6 @@
       }
     };
 
-    // START
     startCamera();
 
   </script>
