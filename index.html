@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V39 (Stabilisation Record)</title>
+  <title>Camera Pro V40 (Nettoyage Galerie & Stabilité)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -224,7 +224,7 @@
     let isCountingDown = false;
     let shouldCheckDuration = false;
     let isToggleLocked = false;
-    let isSwitching = false; // NEW: Verrou pour le switch
+    let isSwitching = false;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -243,7 +243,6 @@
     // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            // Stop tout si l'utilisateur change d'onglet ou quitte l'app (pour économiser CPU/GPU)
             if (!isRecording && !isCountingDown) {
                 if (mediaStream) {
                     mediaStream.getTracks().forEach(track => track.stop());
@@ -251,7 +250,6 @@
                 }
             }
         } else {
-            // Redémarrer la caméra quand l'utilisateur revient
             if (!mediaStream && !isRecording && !isCountingDown) {
                 startCamera();
             }
@@ -355,7 +353,6 @@
       const interval = setInterval(() => {
         count--;
         
-        // Bip final sur 1 pour qu'il ne soit PAS enregistré
         if (count > 1) { 
           countdownDisplay.textContent = count;
           playBeep(1000, 'short');
@@ -363,23 +360,20 @@
           countdownDisplay.textContent = count;
           playBeep(1500, 'long'); 
         } else {
-          // count === 0
           clearInterval(interval);
           countdownDisplay.classList.remove('active');
           document.querySelector('.controls').style.opacity = '1';
           isCountingDown = false;
-          startRecording(); // Démarrage SILENCIEUX ici
+          startRecording();
         }
       }, 1000);
     }
 
-    // Fonction pour redémarrer/acquérir le flux de la caméra
     async function startCamera() {
-      // NEW: Stop toutes les pistes si le stream existe (nécessaire avant de changer de caméra ou relancer après une erreur)
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
       
       const constraints = {
-        audio: true, // On démarre avec le micro
+        audio: true,
         video: { 
             facingMode: facingMode,
             width: { ideal: 1920, max: 1920 },
@@ -391,7 +385,6 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         
-        // Vider la source puis la redéfinir force le rechargement
         cameraPreview.srcObject = null;
         cameraPreview.srcObject = mediaStream;
         
@@ -411,16 +404,12 @@
 
       } catch (error) { console.error(error); }
     }
-
-    // NEW: Fonction pour ajouter une piste audio au flux V/A existant
+    
     async function addAudioTrack(currentStream) {
         if (!navigator.mediaDevices || !currentStream) return false;
         try {
-            // Acquérir seulement le micro
             const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
             const audioTrack = audioStream.getAudioTracks()[0];
-            
-            // Ajouter cette piste au flux vidéo existant
             currentStream.addTrack(audioTrack);
             return true;
         } catch (error) {
@@ -447,22 +436,20 @@
     };
 
     async function startRecording() {
-      // 1. Vérifier si le micro est manquant
       const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
 
       if (audioMissing) {
-        
-        // NEW: Tentative d'ajouter le micro au flux vidéo existant (si possible)
         const videoExists = mediaStream && mediaStream.getVideoTracks().length > 0;
         
         if (videoExists) {
+            // Tente d'ajouter le micro au flux vidéo existant (léger)
             const added = await addAudioTrack(mediaStream);
             if (!added) {
-                // Si l'ajout échoue, on relance le flux complet (fallback lourd)
+                // Fallback si l'ajout échoue : redémarrage complet (lourd)
                 await startCamera();
             }
         } else {
-             // Si pas de flux du tout, relance complète
+             // Pas de flux du tout : redémarrage complet
              await startCamera();
         }
       }
@@ -570,18 +557,16 @@
             shouldCheckDuration = false;
         }
     };
+
+    flashBtn.onclick = toggleFlash;
     
-    // NEW: Fonction de basculement améliorée
     switchBtn.onclick = () => {
        if (isRecording || isCountingDown || isSwitching) return;
        isSwitching = true;
        
        switchBtn.style.transform = "rotate(180deg)";
-       
-       // Stop l'ancien flux proprement (sinon iOS/Android freeze au changement)
        if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
        
-       // Change de face
        facingMode = (facingMode === 'environment') ? 'user' : 'environment';
        
        startCamera().then(() => {
@@ -592,11 +577,13 @@
        });
     };
     
-    flashBtn.onclick = toggleFlash;
-    
-    // --- Galerie: Coupe micro, garde vidéo, ouvre menu ---
+    // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
+       // Correction 1: Nettoyer l'ancienne preview
+       hidePreview();
+
        if (mediaStream) {
+           // On coupe uniquement les pistes AUDIO (garde la vidéo pour la fluidité)
            mediaStream.getAudioTracks().forEach(track => {
                track.stop();
                mediaStream.removeTrack(track);
