@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V8 (Safe)</title>
+  <title>Camera Pro V9</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -39,7 +39,7 @@
     video {
       width: 100%;
       height: 100%;
-      object-fit: cover;
+      object-fit: cover; /* Remplit l'écran sans déformer */
       display: block;
       pointer-events: none;
       background: #000;
@@ -55,7 +55,7 @@
       inset: 0;
       z-index: 50;
       background: #000;
-      display: none; /* Caché par défaut */
+      display: none;
       opacity: 0;
       flex-direction: column;
       transition: opacity 0.2s ease;
@@ -370,20 +370,20 @@
         return u;
       }
 
-      // --- CAMERA START (Safe Mode) ---
+      // --- CAMERA START (RESOLUTION PAYSAGE POUR DEZOOMER) ---
       async function startCamera() {
         if (mediaStream) {
           mediaStream.getTracks().forEach(t => t.stop());
         }
 
-        // On ne force PAS la résolution 1920x1080 car ça fait planter certains téléphones.
-        // On demande "idealement" du 1080p, mais le navigateur fera de son mieux.
+        // C'EST ICI LE SECRET : On demande du "Paysage" (Wide)
+        // Le téléphone comprend qu'il doit utiliser le grand angle.
         const constraints = {
           audio: true,
           video: { 
             facingMode: facingMode,
-            width: { ideal: 1080 },
-            height: { ideal: 1920 }
+            width: { ideal: 1920 }, // Largeur plus grande = Grand Angle
+            height: { ideal: 1080 }
           }
         };
 
@@ -391,7 +391,7 @@
           mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
           cameraPreview.srcObject = mediaStream;
 
-          // Miroir si selfie
+          // MIROIR
           if (facingMode === 'user') {
               cameraPreview.style.transform = "scaleX(-1)";
           } else {
@@ -401,8 +401,18 @@
           checkFlashCapability();
           
         } catch (err) {
-          alert("Erreur Caméra : " + err.name); 
-          notifyHost({ status: 'error', message: 'Camera start error: ' + err.message });
+          // Fallback si la résolution paysage plante
+          console.log("Fallback resolution");
+          try {
+             const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                audio: true, video: { facingMode: facingMode }
+             });
+             mediaStream = fallbackStream;
+             cameraPreview.srcObject = mediaStream;
+             checkFlashCapability();
+          } catch(e) {
+             notifyHost({ status: 'error', message: 'Camera start error' });
+          }
         }
       }
 
