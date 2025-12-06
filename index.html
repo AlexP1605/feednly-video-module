@@ -185,7 +185,7 @@
 
   <div id="upload-overlay"><div class="spinner"></div><div id="upload-text">Préparation...</div></div>
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
-  <input type="file" id="galleryInput" accept="video/*" />
+  <input type="file" id="galleryInput" accept="video/*" capture="environment" />
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
@@ -362,16 +362,8 @@
       };
 
       try {
-        // On obtient d'abord la vidéo seule pour éviter le blocage quand l'audio est indisponible (ex: appel en cours).
+        // Acquisition vidéo uniquement pour éviter toute demande microphone (ex: appel en cours).
         mediaStream = await navigator.mediaDevices.getUserMedia({ ...videoConstraints, audio: false });
-
-        // Puis on tente d'ajouter l'audio si possible, sans bloquer si l'appareil le refuse.
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          audioStream.getAudioTracks().forEach(track => mediaStream.addTrack(track));
-        } catch (err) {
-          showError("Micro indisponible. Capture vidéo seulement.");
-        }
 
         cameraPreview.srcObject = mediaStream;
         cameraPreview.play().catch(() => {});
@@ -521,7 +513,20 @@
        facingMode = (facingMode === 'environment') ? 'user' : 'environment';
        startCamera();
     };
-    galleryBtn.onclick = () => galleryInput.click();
+    function detachAudioTracks() {
+      if (!mediaStream) return;
+      mediaStream.getAudioTracks().forEach(track => {
+        track.stop();
+        mediaStream.removeTrack(track);
+      });
+    }
+
+    galleryBtn.onclick = () => {
+      // Sur iOS, choisir « Take Video » après avoir ouvert la galerie relance la capture native.
+      // On supprime toute piste audio active avant d'ouvrir le sélecteur afin d'éviter un conflit de microphone.
+      detachAudioTracks();
+      galleryInput.click();
+    };
     
     function handleFileSelect(e) {
        const file = e.target.files[0];
