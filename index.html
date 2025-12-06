@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V40 (Nettoyage Galerie & Stabilité)</title>
+  <title>Camera Pro V41 (Nettoyage Galerie Fix)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -442,19 +442,15 @@
         const videoExists = mediaStream && mediaStream.getVideoTracks().length > 0;
         
         if (videoExists) {
-            // Tente d'ajouter le micro au flux vidéo existant (léger)
             const added = await addAudioTrack(mediaStream);
             if (!added) {
-                // Fallback si l'ajout échoue : redémarrage complet (lourd)
                 await startCamera();
             }
         } else {
-             // Pas de flux du tout : redémarrage complet
              await startCamera();
         }
       }
       
-      // Sécurité finale
       if (isRecording || !mediaStream || mediaStream.getAudioTracks().length === 0) {
           showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
           return;
@@ -535,11 +531,13 @@
     }
 
     function hidePreview() {
+       // --- CORRECTION CLÉ : Nettoyer l'état de la preview ---
        previewOverlay.classList.remove('active');
-       document.body.classList.remove('showing-preview');
+       document.body.classList.remove('showing-preview'); 
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
+       // --- FIN CORRECTION CLÉ ---
        
        // Le flux vidéo doit rester actif. On redémarre seulement si le flux a été coupé
        if (!mediaStream || !mediaStream.active) {
@@ -579,11 +577,10 @@
     
     // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
-       // Correction 1: Nettoyer l'ancienne preview
+       // 1. Nettoyer l'ancienne preview pour éviter le bug d'affichage
        hidePreview();
 
        if (mediaStream) {
-           // On coupe uniquement les pistes AUDIO (garde la vidéo pour la fluidité)
            mediaStream.getAudioTracks().forEach(track => {
                track.stop();
                mediaStream.removeTrack(track);
@@ -595,7 +592,6 @@
     function handleFileSelect(e) {
        const file = e.target.files[0];
        if(!file) {
-           // Si on annule, on redémarre la caméra (pour reprendre le micro)
            startCamera();
            return;
        }
