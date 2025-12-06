@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V29 (iOS Call Fix)</title>
+  <title>Camera Pro V30 (Stable & Smooth)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -29,14 +29,22 @@
     video {
       width: 100%; height: 100%; object-fit: cover; display: block;
       transform: scaleX(1); pointer-events: none;
+      
+      /* RETOUR DU SYSTEME FLUIDE (V24) */
+      opacity: 0; 
+      transition: opacity 0.4s ease-out;
     }
+    
+    /* La classe qui affiche la vidéo seulement quand elle est prête */
+    video.visible { opacity: 1; }
+    
     video::-webkit-media-controls { display: none !important; }
 
     /* --- CONTROLS --- */
     .controls { 
         position: absolute; inset: 0; z-index: 20; 
         pointer-events: none; 
-        transition: opacity 0.2s;
+        transition: opacity 0.3s ease;
     }
     
     .top-bar { 
@@ -45,6 +53,7 @@
       height: 80px;
       display: flex; justify-content: center; align-items: center; 
       pointer-events: auto;
+      transition: opacity 0.3s;
     }
     
     .bottom-bar { 
@@ -52,6 +61,14 @@
       padding: 0 30px calc(40px + env(safe-area-inset-bottom)) 30px; 
       display: flex; align-items: center; justify-content: space-between; 
       z-index: 30;
+      transition: opacity 0.3s;
+    }
+
+    /* QUAND ON ENREGISTRE : On cache tout */
+    body.recording .top-bar, 
+    body.recording .bottom-bar .side { 
+        opacity: 0 !important; 
+        pointer-events: none; 
     }
 
     /* --- PREVIEW UI (REPLAY) --- */
@@ -73,6 +90,7 @@
     #preview-video { 
       width: 100%; height: 100%; object-fit: cover; 
       pointer-events: none; 
+      opacity: 1; /* Le replay lui est toujours visible */
     }
 
     #preview-actions { 
@@ -238,7 +256,7 @@
     let timerDuration = 0; 
     let isCountingDown = false;
     let checkGalleryDuration = false;
-    let isWaitingForReturn = false; // Pour savoir si on attend le retour du menu iOS
+    let isWaitingForReturn = false; 
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -253,6 +271,7 @@
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playBeep() {
+       // CORRECTION SON : Si le son était bloqué, on le réveille
        if (audioCtx.state === 'suspended') audioCtx.resume();
        const osc = audioCtx.createOscillator();
        const gain = audioCtx.createGain();
@@ -352,6 +371,9 @@
     }
 
     async function startCamera() {
+      // CORRECTION FLUIDITE : On cache d'abord, on charge, puis on affiche
+      cameraPreview.classList.remove('visible'); 
+      
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
 
       const constraints = {
@@ -363,6 +385,12 @@
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStream = stream;
         cameraPreview.srcObject = mediaStream;
+        
+        // CORRECTION FLUIDITE : On attend que ça joue pour afficher
+        cameraPreview.onplaying = () => {
+             cameraPreview.classList.add('visible');
+        };
+        
         cameraPreview.play().catch(e=>{});
         
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
@@ -380,7 +408,11 @@
       } catch (error) { console.error(error); }
     }
 
+    // BOUTON RECORD
     recordBtn.onclick = () => {
+      // CORRECTION SON : On force le réveil de l'audio dès le clic utilisateur
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      
       if (isRecording) {
         stopRecording();
       } else {
@@ -407,7 +439,7 @@
       };
       mediaRecorder.start();
       isRecording = true;
-      document.body.classList.add('recording');
+      document.body.classList.add('recording'); // CACHE LES BOUTONS
       
       recordingStartTime = Date.now();
       progressCircle.style.strokeDashoffset = circumference;
@@ -456,7 +488,7 @@
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
-       isWaitingForReturn = false; // Reset
+       isWaitingForReturn = false; 
        startCamera();
     }
 
@@ -479,22 +511,21 @@
        startCamera();
     };
     
-    // --- GESTION GALLERY ET APPEL IOS ---
+    // --- GESTION GALLERY ET APPEL IOS FIX (CRITIQUE) ---
     galleryBtn.onclick = () => {
-       // FIX CRITIQUE IOS : On coupe le flux pour éviter l'erreur "Appel actif"
+       // On coupe tout pour éviter le bug "Appel actif"
        if(mediaStream) {
            mediaStream.getTracks().forEach(track => track.stop());
            mediaStream = null;
+           cameraPreview.srcObject = null; // Important pour iOS
        }
-       isWaitingForReturn = true; // On note qu'on a ouvert le menu
+       isWaitingForReturn = true; 
        galleryInput.click();
     };
     
-    // SI L'UTILISATEUR ANNULE DANS LE MENU IOS, ON RELANCE LA CAM
-    // On utilise le focus de la fenêtre pour détecter le retour
+    // RETOUR DE L'UTILISATEUR SANS VIDEO
     window.onfocus = () => {
         if (isWaitingForReturn && !recordedBlob) {
-            // Petit délai pour laisser le temps à onchange de se déclencher si un fichier a été choisi
             setTimeout(() => {
                 if (!recordedBlob) {
                     isWaitingForReturn = false;
@@ -505,10 +536,10 @@
     };
     
     galleryInput.onchange = (e) => {
-       isWaitingForReturn = false; // On a bien reçu un fichier
+       isWaitingForReturn = false; 
        const file = e.target.files[0];
        if(!file) {
-           startCamera(); // Annulation, on relance
+           startCamera(); 
            return;
        }
        recordedBlob = file;
