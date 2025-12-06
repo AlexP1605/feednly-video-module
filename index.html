@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V26 (Duration Check)</title>
+  <title>Camera Pro V31 (Layout & Duration Fix)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -57,8 +57,8 @@
     
     .bottom-bar { 
       position: absolute; bottom: 0; width: 100%; 
-      /* Espace généreux pour éviter le menu iOS */
-      padding: 0 30px calc(40px + env(safe-area-inset-bottom)) 30px; 
+      /* CORRECTION DEMANDEE : Boutons plus bas (20px) */
+      padding: 0 30px calc(20px + env(safe-area-inset-bottom)) 30px; 
       display: flex; align-items: center; justify-content: space-between; 
       z-index: 30;
     }
@@ -215,6 +215,8 @@
     
     let timerDuration = 0; 
     let isCountingDown = false;
+    // VARIABLE POUR LE CHECK DUREE
+    let shouldCheckDuration = false;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -243,7 +245,7 @@
     function showError(msg) {
         errorToast.textContent = msg;
         errorToast.classList.add('active');
-        setTimeout(() => { errorToast.classList.remove('active'); }, 3000);
+        setTimeout(() => { errorToast.classList.remove('active'); }, 4000);
     }
 
     function notifyHost(payload) {
@@ -405,6 +407,7 @@
        document.body.classList.remove('recording');
        progressCircle.style.strokeDashoffset = circumference;
        if (torchEnabled) toggleFlash();
+       shouldCheckDuration = false; // Pas besoin de check si on a filmé nous même (car on coupe a 60s)
        showPreview(recordedBlob);
     }
 
@@ -413,8 +416,13 @@
        previewObjectURL = URL.createObjectURL(blob);
        previewVideo.src = previewObjectURL;
        
-       if (recordedFacingMode === 'user') previewVideo.style.transform = "scaleX(-1)";
-       else previewVideo.style.transform = "scaleX(1)";
+       // Si on vient de la galerie (ou camera native), on ne met pas de miroir
+       if (shouldCheckDuration) {
+            previewVideo.style.transform = "scaleX(1)";
+       } else {
+           if (recordedFacingMode === 'user') previewVideo.style.transform = "scaleX(-1)";
+           else previewVideo.style.transform = "scaleX(1)";
+       }
        
        previewOverlay.classList.add('active');
        document.body.classList.add('showing-preview');
@@ -430,6 +438,19 @@
        if(!mediaStream || !mediaStream.active) startCamera();
     }
 
+    // --- LOGIQUE DE CHECK DUREE DANS LE PREVIEW ---
+    previewVideo.onloadedmetadata = () => {
+        // Uniquement si ça vient de la galerie ou camera native
+        if (shouldCheckDuration) {
+            if (previewVideo.duration > 61) {
+                const sec = Math.round(previewVideo.duration);
+                showError(`Vidéo trop longue (${Math.floor(sec/60)}m${sec%60}s). Max 60s.`);
+                hidePreview(); // On ferme la preview
+            }
+            shouldCheckDuration = false; // Reset
+        }
+    };
+
     flashBtn.onclick = toggleFlash;
     switchBtn.onclick = () => {
        switchBtn.style.transform = "rotate(180deg)";
@@ -439,32 +460,24 @@
     };
     galleryBtn.onclick = () => galleryInput.click();
     
-    // --- GESTION GALLERY ET DUREE ---
-    galleryInput.onchange = (e) => {
+    // FONCTION COMMUNE POUR GERER LE FICHIER (GALLERY OU NATIVE)
+    function handleFileSelect(e) {
        const file = e.target.files[0];
        if(!file) return;
        
-       const v = document.createElement('video');
-       v.preload = 'metadata';
+       recordedBlob = file;
+       shouldCheckDuration = true; // On active le check de durée
        
-       v.onloadedmetadata = () => {
-          // CHECK DUREE
-          if(v.duration > 61) {
-              const sec = Math.round(v.duration);
-              showError(`Vidéo trop longue (${Math.floor(sec/60)}m${sec%60}s). Max 60s.`);
-              galleryInput.value = ''; // Reset
-              return;
-          }
-          
-          recordedBlob = file;
-          recordedFacingMode = 'environment';
-          showPreview(file);
-          galleryInput.value = '';
-       };
-       
-       v.src = URL.createObjectURL(file);
-    };
+       // On lance direct la preview (c'est elle qui va vérifier la durée via onloadedmetadata)
+       showPreview(file);
+       e.target.value = ''; // Reset input
+    }
 
+    // On branche la même fonction sur les deux inputs
+    galleryInput.onchange = handleFileSelect;
+    // (Si tu as un bouton Take Video séparé qui déclenche camera-input, tu peux le brancher aussi)
+    // Sinon galleryInput suffit pour tout si on choisit "Take Video" dans le menu iOS
+    
     restartBtn.onclick = hidePreview;
     
     nextBtn.onclick = () => {
