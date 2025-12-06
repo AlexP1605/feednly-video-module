@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V34 (Limit 1080p)</title>
+  <title>Camera Pro V36 (Menu iOS & Mic Fix)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -132,6 +132,7 @@
     }
     #error-toast.active { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    /* IMPORTANT : Pas de capture="environment" pour avoir le menu iOS */
     input[type="file"] { display: none; }
     body.showing-preview .controls { display: none !important; }
   </style>
@@ -185,7 +186,7 @@
 
   <div id="upload-overlay"><div class="spinner"></div><div id="upload-text">Préparation...</div></div>
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
-  <input type="file" id="galleryInput" accept="video/*" capture="environment" />
+  <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
     const cameraPreview = document.getElementById('camera-preview');
@@ -349,41 +350,37 @@
       }, 1000);
     }
 
-    async function startCamera(showErrors = true) {
+    async function startCamera() {
       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-
-      // CONFIGURATION 1080P STRICTE (PAS DE 4K)
-      const videoConstraints = {
-        video: {
-          facingMode,
-          width: { ideal: 1920, max: 1920 },
-          height: { ideal: 1080, max: 1080 },
-        },
+      
+      const constraints = {
+        audio: true, // On démarre avec le micro par défaut
+        video: { 
+            facingMode: facingMode,
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 }
+        }
       };
 
       try {
-        // Acquisition vidéo uniquement pour éviter toute demande microphone (ex: appel en cours).
-        mediaStream = await navigator.mediaDevices.getUserMedia({ ...videoConstraints, audio: false });
-
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        mediaStream = stream;
         cameraPreview.srcObject = mediaStream;
-        cameraPreview.play().catch(() => {});
-
+        cameraPreview.play().catch(e=>{});
+        
         cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
 
         torchEnabled = false;
         updateFlashUI();
-
+        
         setTimeout(() => {
-          const track = mediaStream.getVideoTracks()[0];
-          const caps = track && track.getCapabilities ? track.getCapabilities() : {};
-          torchSupported = !!caps.torch;
-          updateFlashUI();
+           const track = mediaStream.getVideoTracks()[0];
+           const caps = track.getCapabilities ? track.getCapabilities() : {};
+           torchSupported = !!caps.torch;
+           updateFlashUI();
         }, 300);
 
-      } catch (error) {
-        console.error(error);
-        if (showErrors) showError("Impossible d'accéder à la caméra.");
-      }
+      } catch (error) { console.error(error); }
     }
 
     // --- LOGIQUE BOUTON ROBUSTE ---
@@ -404,17 +401,17 @@
     };
 
     async function startRecording() {
-      if (!mediaStream || !mediaStream.active) await startCamera();
-      if (!mediaStream || !mediaStream.active) {
-        showError("Impossible d'accéder à la caméra.");
-        return;
+      // Sécurité : On vérifie si on a toujours le micro
+      // Si on vient de la galerie, le micro a été coupé, donc on relance la caméra proprement
+      if (!mediaStream || !mediaStream.active || mediaStream.getAudioTracks().length === 0) {
+           await startCamera();
       }
+      
       if (isRecording) return;
       
       recordedFacingMode = facingMode; 
       recordedChunks = [];
       
-      // OPTION QUALITÉ (2.5 Mbps)
       let options = {
          mimeType: 'video/mp4',
          videoBitsPerSecond: 2500000 
@@ -492,7 +489,8 @@
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
-       if(!mediaStream || !mediaStream.active) startCamera();
+       // Si on avait coupé le micro ou perdu le flux, startCamera le remet d'équerre
+       startCamera();
     }
 
     previewVideo.onloadedmetadata = () => {
@@ -513,24 +511,27 @@
        facingMode = (facingMode === 'environment') ? 'user' : 'environment';
        startCamera();
     };
-    function detachAudioTracks() {
-      if (!mediaStream) return;
-      mediaStream.getAudioTracks().forEach(track => {
-        track.stop();
-        mediaStream.removeTrack(track);
-      });
-    }
-
+    
+    // --- CORRECTION CLÉ : Juste couper le micro, pas la vidéo ---
     galleryBtn.onclick = () => {
-      // Sur iOS, choisir « Take Video » après avoir ouvert la galerie relance la capture native.
-      // On supprime toute piste audio active avant d'ouvrir le sélecteur afin d'éviter un conflit de microphone.
-      detachAudioTracks();
-      galleryInput.click();
+       if (mediaStream) {
+           // On coupe uniquement les pistes AUDIO pour éviter le conflit "En appel"
+           mediaStream.getAudioTracks().forEach(track => {
+               track.stop();
+               mediaStream.removeTrack(track);
+           });
+       }
+       // On ouvre le menu (sans capture="environment", donc menu iOS complet)
+       galleryInput.click();
     };
     
     function handleFileSelect(e) {
        const file = e.target.files[0];
-       if(!file) return;
+       if(!file) {
+           // Si on annule, on s'assure que le micro revient si on veut filmer après
+           startCamera();
+           return;
+       }
        recordedBlob = file;
        shouldCheckDuration = true;
        showPreview(file);
@@ -567,8 +568,7 @@
       }
     };
 
-    // Tentative silencieuse pour éviter un message d'erreur avant l'interaction utilisateur.
-    startCamera(false);
+    startCamera();
 
   </script>
 </body>
