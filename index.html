@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Camera Pro V41 (Nettoyage Galerie Fix)</title>
+  <title>Camera Pro V42 (Double Nettoyage d'État)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -531,15 +531,12 @@
     }
 
     function hidePreview() {
-       // --- CORRECTION CLÉ : Nettoyer l'état de la preview ---
        previewOverlay.classList.remove('active');
-       document.body.classList.remove('showing-preview'); 
+       document.body.classList.remove('showing-preview'); 
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
-       // --- FIN CORRECTION CLÉ ---
        
-       // Le flux vidéo doit rester actif. On redémarre seulement si le flux a été coupé
        if (!mediaStream || !mediaStream.active) {
            startCamera();
        }
@@ -602,7 +599,15 @@
     }
 
     galleryInput.onchange = handleFileSelect;
-    restartBtn.onclick = hidePreview;
+    
+    // --- CORRECTION CLÉ : Double nettoyage de la vidéo de prévisualisation ---
+    restartBtn.onclick = () => {
+        // Nettoyage explicite AVANT d'appeler hidePreview pour vider la source
+        previewVideo.pause();
+        previewVideo.src = '';
+        hidePreview();
+    };
+    // --- FIN CORRECTION CLÉ ---
     
     nextBtn.onclick = () => {
        const url = getUploadURL();
