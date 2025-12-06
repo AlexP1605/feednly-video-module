@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V6</title>
+  <title>Camera Pro V7</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
       --glass-border: rgba(255, 255, 255, 0.2);
       --primary: #ff3b30;
+      --black-bar: #000000;
     }
 
     * {
@@ -27,7 +28,7 @@
       font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     }
 
-    /* --- LAYERS --- */
+    /* --- CAMERA LIVE (Plein écran) --- */
     #camera-container {
       position: fixed;
       inset: 0;
@@ -35,18 +36,6 @@
       background: #000;
     }
 
-    #preview-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      background: #000;
-      display: none;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    #preview-overlay.active { display: block; opacity: 1; }
-
-    /* VIDEO ELEMENT */
     video {
       width: 100%;
       height: 100%;
@@ -54,13 +43,71 @@
       display: block;
       pointer-events: none;
       background: #000;
-      transform: scaleX(1); /* Par défaut normal */
     }
     
     /* Anti-Play Button */
     video::-webkit-media-controls { display: none !important; }
 
-    /* --- UI --- */
+    /* --- PREVIEW ECRAN (Split Layout) --- */
+    #preview-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: #000;
+      display: none;
+      opacity: 0;
+      flex-direction: column; /* Colonne pour séparer vidéo et boutons */
+      transition: opacity 0.2s ease;
+    }
+    
+    #preview-overlay.active { 
+      display: flex; 
+      opacity: 1; 
+    }
+
+    /* Zone Vidéo Preview (Haut) */
+    .preview-video-container {
+      flex: 1; /* Prend tout l'espace disponible */
+      position: relative;
+      overflow: hidden;
+      border-bottom-left-radius: 20px;
+      border-bottom-right-radius: 20px;
+      background: #000;
+    }
+
+    #preview-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover; /* Rempli la zone définie */
+    }
+
+    /* Zone Boutons (Bas - Barre noire) */
+    #preview-actions {
+      height: 100px; /* Hauteur fixe pour les boutons */
+      min-height: 100px;
+      background: var(--black-bar);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      padding: 0 24px;
+      z-index: 60;
+    }
+
+    .action-btn {
+      flex: 1;
+      height: 52px;
+      font-size: 16px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(255,255,255,0.1);
+    }
+    #restart-button { background: #222; color: #fff; border: 1px solid #444; }
+    #next-button { background: #fff; color: #000; }
+
+    /* --- UI CAMERA CONTROLS --- */
     .controls {
       position: absolute;
       inset: 0;
@@ -187,32 +234,6 @@
       100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
     }
 
-    /* --- PREVIEW ACTIONS --- */
-    #preview-actions {
-      position: absolute;
-      bottom: 40px;
-      left: 0;
-      width: 100%;
-      z-index: 60;
-      display: flex;
-      gap: 15px;
-      padding: 0 24px;
-      pointer-events: auto;
-    }
-
-    .action-btn {
-      flex: 1;
-      height: 52px;
-      font-size: 16px;
-      font-weight: 700;
-      border: none;
-      cursor: pointer;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-    }
-    #restart-button { background: #000; color: #fff; border: 1px solid rgba(255,255,255,0.2); }
-    #next-button { background: #fff; color: #000; }
-
     /* --- UPLOAD OVERLAY --- */
     #upload-overlay {
       position: fixed;
@@ -278,7 +299,9 @@
   </div>
 
   <div id="preview-overlay">
-    <video id="preview-video" playsinline webkit-playsinline loop></video>
+    <div class="preview-video-container">
+      <video id="preview-video" playsinline webkit-playsinline loop></video>
+    </div>
     <div id="preview-actions">
       <button type="button" id="restart-button" class="action-btn">Recommencer</button>
       <button type="button" id="next-button" class="action-btn">Suivant</button>
@@ -294,6 +317,7 @@
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
+    // --- INIT VARS ---
     const cameraPreview = document.getElementById('camera-preview');
     const previewVideo = document.getElementById('preview-video');
     const previewOverlay = document.getElementById('preview-overlay');
@@ -330,6 +354,7 @@
     progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
     progressCircle.style.strokeDashoffset = circumference;
 
+    // --- MESSAGING ---
     function notifyHost(payload) {
       try {
         const msg = JSON.stringify(payload);
@@ -347,41 +372,53 @@
       return u;
     }
 
-    // --- CAMERA ENGINE (Le retour du code V1 pour la résolution) ---
+    // --- CAMERA ENGINE (Optimisé Vitesse) ---
     async function startCamera() {
-      // Pour éviter le zoom : on demande une résolution PAYSAGE (Wide)
-      // Le téléphone comprend qu'il doit utiliser tout le capteur.
+      // On coupe le flux précédent immédiatement pour libérer la ressource
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+      }
+
       const constraints = {
         audio: true,
         video: { 
           facingMode: facingMode,
-          width: { ideal: 1920 }, // Largeur > Hauteur force le grand angle
+          // Priorité Haute résolution pour éviter le zoom
+          width: { ideal: 1920 },
           height: { ideal: 1080 }
         }
       };
 
       try {
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-        
-        // Arrêter proprement l'ancien flux seulement maintenant
-        if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-        
-        mediaStream = newStream;
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
         cameraPreview.srcObject = mediaStream;
 
-        // --- GESTION MIROIR ---
-        // Si c'est la caméra avant ('user'), on inverse l'axe X
+        // MIROIR
         if (facingMode === 'user') {
             cameraPreview.style.transform = "scaleX(-1)";
         } else {
             cameraPreview.style.transform = "scaleX(1)";
         }
         
-        // Torch Check
-        const track = mediaStream.getVideoTracks()[0];
-        const caps = track.getCapabilities ? track.getCapabilities() : {};
-        torchSupported = !!caps.torch && facingMode === 'environment';
+        // FLASH CHECK (ROBUSTE)
+        checkFlashCapability();
         
+      } catch (err) {
+        notifyHost({ status: 'error', message: 'Camera start error' });
+      }
+    }
+
+    // Fonction séparée pour vérifier le flash proprement
+    function checkFlashCapability() {
+        if (!mediaStream) return;
+        const track = mediaStream.getVideoTracks()[0];
+        
+        // On essaie de détecter via les capacités
+        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+        
+        // Le flash n'est dispo que sur la caméra arrière (environment)
+        torchSupported = !!capabilities.torch && facingMode === 'environment';
+
         if(torchSupported) {
           flashBtn.classList.remove('disabled');
         } else {
@@ -389,10 +426,6 @@
           flashBtn.classList.remove('flash-on');
           torchEnabled = false;
         }
-        
-      } catch (err) {
-        notifyHost({ status: 'error', message: 'Camera start error' });
-      }
     }
 
     // --- RECORDING ---
@@ -418,7 +451,6 @@
       isRecording = true;
       document.body.classList.add('recording');
       
-      // Timer
       recordingStartTime = Date.now();
       progressCircle.style.strokeDashoffset = circumference;
       
@@ -450,11 +482,13 @@
       previewObjectURL = URL.createObjectURL(blob);
       previewVideo.src = previewObjectURL;
       
-      // On retire l'effet miroir pour la lecture (la vidéo enregistrée est brute)
+      // Reset transform pour la lecture
       previewVideo.style.transform = "scaleX(1)";
       
       previewOverlay.classList.add('active');
-      document.body.classList.add('showing-preview');
+      document.body.classList.add('showing-preview'); // Cache les contrôles
+      
+      // Lecture auto
       previewVideo.play().catch(()=>{});
     }
 
@@ -465,13 +499,14 @@
       previewVideo.src = '';
       recordedChunks = [];
       recordedBlob = null;
+      // Relance la cam si besoin
+      if(!mediaStream || !mediaStream.active) startCamera();
     }
 
     // --- FILE CHECK ---
     function handleFile(e) {
       const file = e.target.files[0];
       if (!file) return;
-
       const v = document.createElement('video');
       v.preload = 'metadata';
       v.onloadedmetadata = function() {
@@ -540,31 +575,20 @@
          torchEnabled = !torchEnabled;
          await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:torchEnabled}]});
          flashBtn.classList.toggle('flash-on', torchEnabled);
-       } catch(e) { torchEnabled = !torchEnabled; }
+       } catch(e) { 
+         // Fallback si ça échoue (parfois le bouton s'active mais le hardware refuse)
+         torchEnabled = !torchEnabled;
+         console.log("Flash failed");
+       }
     };
 
     recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
     
     switchBtn.onclick = () => {
-      // Animation visuelle
       switchBtn.style.transform = "rotate(180deg)";
       setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
-      
       facingMode = (facingMode === 'user') ? 'environment' : 'user';
       startCamera();
     };
 
     galleryBtn.onclick = () => galleryInput.click();
-    galleryInput.onchange = handleFile;
-    restartBtn.onclick = hidePreview;
-    nextBtn.onclick = uploadToMux;
-    
-    // Play/Pause Click
-    previewOverlay.onclick = (e) => {
-      if(!e.target.closest('.action-btn')) previewVideo.paused ? previewVideo.play() : previewVideo.pause();
-    };
-
-    document.addEventListener('DOMContentLoaded', startCamera);
-  </script>
-</body>
-</html>
