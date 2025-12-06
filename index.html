@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Camera Pro V7</title>
+  <title>Camera Pro V8 (Safe)</title>
   <style>
     :root {
       --glass-bg: rgba(20, 20, 20, 0.65);
@@ -28,7 +28,7 @@
       font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     }
 
-    /* --- CAMERA LIVE (Plein écran) --- */
+    /* --- LAYERS --- */
     #camera-container {
       position: fixed;
       inset: 0;
@@ -43,20 +43,21 @@
       display: block;
       pointer-events: none;
       background: #000;
+      transform: scaleX(1);
     }
     
     /* Anti-Play Button */
     video::-webkit-media-controls { display: none !important; }
 
-    /* --- PREVIEW ECRAN (Split Layout) --- */
+    /* --- PREVIEW SPLIT SCREEN --- */
     #preview-overlay {
       position: fixed;
       inset: 0;
       z-index: 50;
       background: #000;
-      display: none;
+      display: none; /* Caché par défaut */
       opacity: 0;
-      flex-direction: column; /* Colonne pour séparer vidéo et boutons */
+      flex-direction: column;
       transition: opacity 0.2s ease;
     }
     
@@ -65,9 +66,8 @@
       opacity: 1; 
     }
 
-    /* Zone Vidéo Preview (Haut) */
     .preview-video-container {
-      flex: 1; /* Prend tout l'espace disponible */
+      flex: 1;
       position: relative;
       overflow: hidden;
       border-bottom-left-radius: 20px;
@@ -78,12 +78,11 @@
     #preview-video {
       width: 100%;
       height: 100%;
-      object-fit: cover; /* Rempli la zone définie */
+      object-fit: cover;
     }
 
-    /* Zone Boutons (Bas - Barre noire) */
     #preview-actions {
-      height: 100px; /* Hauteur fixe pour les boutons */
+      height: 100px;
       min-height: 100px;
       background: var(--black-bar);
       display: flex;
@@ -92,6 +91,7 @@
       gap: 15px;
       padding: 0 24px;
       z-index: 60;
+      pointer-events: auto;
     }
 
     .action-btn {
@@ -102,12 +102,11 @@
       border: none;
       cursor: pointer;
       border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(255,255,255,0.1);
     }
     #restart-button { background: #222; color: #fff; border: 1px solid #444; }
     #next-button { background: #fff; color: #000; }
 
-    /* --- UI CAMERA CONTROLS --- */
+    /* --- CONTROLS --- */
     .controls {
       position: absolute;
       inset: 0;
@@ -134,7 +133,6 @@
       justify-content: space-between;
     }
 
-    /* Masquer l'interface pendant l'enregistrement */
     body.recording .controls .side, 
     body.recording .controls .top-bar {
       opacity: 0;
@@ -163,7 +161,6 @@
     .btn.flash-on { background: rgba(255, 215, 0, 0.2); border-color: #ffd700; }
     .btn.flash-on svg { fill: #ffd700; }
     .btn.disabled { opacity: 0.3; pointer-events: none; }
-    
     .btn svg { width: 24px; height: 24px; fill: white; }
 
     /* --- RECORD BUTTON --- */
@@ -317,278 +314,286 @@
   <input type="file" id="galleryInput" accept="video/*" />
 
   <script>
-    // --- INIT VARS ---
-    const cameraPreview = document.getElementById('camera-preview');
-    const previewVideo = document.getElementById('preview-video');
-    const previewOverlay = document.getElementById('preview-overlay');
-    
-    const recordBtn = document.getElementById('record-btn');
-    const flashBtn = document.getElementById('flash-btn');
-    const switchBtn = document.getElementById('switch-btn');
-    const galleryBtn = document.getElementById('gallery-btn');
-    const restartBtn = document.getElementById('restart-button');
-    const nextBtn = document.getElementById('next-button');
-    
-    const galleryInput = document.getElementById('galleryInput');
-    const uploadOverlay = document.getElementById('upload-overlay');
-    const uploadText = document.getElementById('upload-text');
-    const progressCircle = document.getElementById('record-progress-circle');
-
-    let mediaStream = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
-    let isRecording = false;
-    let recordedBlob = null;
-    let previewObjectURL = null;
-    
-    let facingMode = 'environment';
-    let torchSupported = false;
-    let torchEnabled = false;
-    let uploadURL = '';
-
-    const MAX_DURATION = 60000;
-    const circumference = 2 * Math.PI * 46;
-    let recordingStartTime = 0;
-    let progressInterval = null;
-    
-    progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-    progressCircle.style.strokeDashoffset = circumference;
-
-    // --- MESSAGING ---
-    function notifyHost(payload) {
-      try {
-        const msg = JSON.stringify(payload);
-        if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
-        else if (window.parent) window.parent.postMessage(msg, '*');
-      } catch (e) { console.error(e); }
-    }
-
-    function getUploadURL() {
-      const p = new URLSearchParams(window.location.search);
-      let u = uploadURL || p.get('upload_url') || p.get('url');
-      if(!u) {
-        try { u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url'); } catch(e){}
-      }
-      return u;
-    }
-
-    // --- CAMERA ENGINE (Optimisé Vitesse) ---
-    async function startCamera() {
-      // On coupe le flux précédent immédiatement pour libérer la ressource
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop());
-      }
-
-      const constraints = {
-        audio: true,
-        video: { 
-          facingMode: facingMode,
-          // Priorité Haute résolution pour éviter le zoom
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
-      };
-
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-        cameraPreview.srcObject = mediaStream;
-
-        // MIROIR
-        if (facingMode === 'user') {
-            cameraPreview.style.transform = "scaleX(-1)";
-        } else {
-            cameraPreview.style.transform = "scaleX(1)";
-        }
-        
-        // FLASH CHECK (ROBUSTE)
-        checkFlashCapability();
-        
-      } catch (err) {
-        notifyHost({ status: 'error', message: 'Camera start error' });
-      }
-    }
-
-    // Fonction séparée pour vérifier le flash proprement
-    function checkFlashCapability() {
-        if (!mediaStream) return;
-        const track = mediaStream.getVideoTracks()[0];
-        
-        // On essaie de détecter via les capacités
-        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-        
-        // Le flash n'est dispo que sur la caméra arrière (environment)
-        torchSupported = !!capabilities.torch && facingMode === 'environment';
-
-        if(torchSupported) {
-          flashBtn.classList.remove('disabled');
-        } else {
-          flashBtn.classList.add('disabled');
-          flashBtn.classList.remove('flash-on');
-          torchEnabled = false;
-        }
-    }
-
-    // --- RECORDING ---
-    async function startRecording() {
-      if (isRecording) return;
-      if (!mediaStream || !mediaStream.active) await startCamera();
-
-      recordedChunks = [];
-      let options = {};
-      if (MediaRecorder.isTypeSupported('video/mp4')) options = { mimeType: 'video/mp4' };
+    document.addEventListener('DOMContentLoaded', () => {
+      // --- INIT VARS ---
+      const cameraPreview = document.getElementById('camera-preview');
+      const previewVideo = document.getElementById('preview-video');
+      const previewOverlay = document.getElementById('preview-overlay');
       
-      try { mediaRecorder = new MediaRecorder(mediaStream, options); } 
-      catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
-
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = () => {
-        recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-        isRecording = false;
-        finalizeRecording();
-      };
-
-      mediaRecorder.start();
-      isRecording = true;
-      document.body.classList.add('recording');
+      const recordBtn = document.getElementById('record-btn');
+      const flashBtn = document.getElementById('flash-btn');
+      const switchBtn = document.getElementById('switch-btn');
+      const galleryBtn = document.getElementById('gallery-btn');
+      const restartBtn = document.getElementById('restart-button');
+      const nextBtn = document.getElementById('next-button');
       
-      recordingStartTime = Date.now();
+      const galleryInput = document.getElementById('galleryInput');
+      const uploadOverlay = document.getElementById('upload-overlay');
+      const uploadText = document.getElementById('upload-text');
+      const progressCircle = document.getElementById('record-progress-circle');
+
+      let mediaStream = null;
+      let mediaRecorder = null;
+      let recordedChunks = [];
+      let isRecording = false;
+      let recordedBlob = null;
+      let previewObjectURL = null;
+      
+      let facingMode = 'environment';
+      let torchSupported = false;
+      let torchEnabled = false;
+      let uploadURL = '';
+
+      const MAX_DURATION = 60000;
+      const circumference = 2 * Math.PI * 46;
+      let recordingStartTime = 0;
+      let progressInterval = null;
+      
+      progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
       progressCircle.style.strokeDashoffset = circumference;
-      
-      const tick = () => {
-        if (!isRecording) return;
-        const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
-        progressCircle.style.strokeDashoffset = circumference * (1 - p);
-        if (p < 1) progressInterval = requestAnimationFrame(tick);
-        else stopRecording();
-      };
-      progressInterval = requestAnimationFrame(tick);
-    }
 
-    function stopRecording() {
-      if (isRecording && mediaRecorder) mediaRecorder.stop();
-    }
+      // --- COMMUNICATION BUBBLE ---
+      function notifyHost(payload) {
+        try {
+          const msg = JSON.stringify(payload);
+          if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(msg);
+          else if (window.parent) window.parent.postMessage(msg, '*');
+        } catch (e) { console.error(e); }
+      }
 
-    function finalizeRecording() {
-      if(progressInterval) cancelAnimationFrame(progressInterval);
-      document.body.classList.remove('recording');
-      progressCircle.style.strokeDashoffset = circumference;
-      stopTorch();
-      showPreview(recordedBlob);
-    }
+      function getUploadURL() {
+        const p = new URLSearchParams(window.location.search);
+        let u = uploadURL || p.get('upload_url') || p.get('url');
+        if(!u) {
+          try { u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url'); } catch(e){}
+        }
+        return u;
+      }
 
-    // --- PREVIEW ---
-    function showPreview(blob) {
-      if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
-      previewObjectURL = URL.createObjectURL(blob);
-      previewVideo.src = previewObjectURL;
-      
-      // Reset transform pour la lecture
-      previewVideo.style.transform = "scaleX(1)";
-      
-      previewOverlay.classList.add('active');
-      document.body.classList.add('showing-preview'); // Cache les contrôles
-      
-      // Lecture auto
-      previewVideo.play().catch(()=>{});
-    }
+      // --- CAMERA START (Safe Mode) ---
+      async function startCamera() {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(t => t.stop());
+        }
 
-    function hidePreview() {
-      previewOverlay.classList.remove('active');
-      document.body.classList.remove('showing-preview');
-      previewVideo.pause();
-      previewVideo.src = '';
-      recordedChunks = [];
-      recordedBlob = null;
-      // Relance la cam si besoin
-      if(!mediaStream || !mediaStream.active) startCamera();
-    }
+        // On ne force PAS la résolution 1920x1080 car ça fait planter certains téléphones.
+        // On demande "idealement" du 1080p, mais le navigateur fera de son mieux.
+        const constraints = {
+          audio: true,
+          video: { 
+            facingMode: facingMode,
+            width: { ideal: 1080 },
+            height: { ideal: 1920 }
+          }
+        };
 
-    // --- FILE CHECK ---
-    function handleFile(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const v = document.createElement('video');
-      v.preload = 'metadata';
-      v.onloadedmetadata = function() {
-        window.URL.revokeObjectURL(v.src);
-        if (v.duration > 61) {
-          alert("Vidéo trop longue (max 60s).");
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+          cameraPreview.srcObject = mediaStream;
+
+          // Miroir si selfie
+          if (facingMode === 'user') {
+              cameraPreview.style.transform = "scaleX(-1)";
+          } else {
+              cameraPreview.style.transform = "scaleX(1)";
+          }
+          
+          checkFlashCapability();
+          
+        } catch (err) {
+          alert("Erreur Caméra : " + err.name); 
+          notifyHost({ status: 'error', message: 'Camera start error: ' + err.message });
+        }
+      }
+
+      function checkFlashCapability() {
+          if (!mediaStream) return;
+          const track = mediaStream.getVideoTracks()[0];
+          const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+          
+          torchSupported = !!capabilities.torch && facingMode === 'environment';
+
+          if(torchSupported) {
+            flashBtn.classList.remove('disabled');
+          } else {
+            flashBtn.classList.add('disabled');
+            flashBtn.classList.remove('flash-on');
+            torchEnabled = false;
+          }
+      }
+
+      // --- RECORDING ---
+      async function startRecording() {
+        if (isRecording) return;
+        if (!mediaStream || !mediaStream.active) await startCamera();
+
+        recordedChunks = [];
+        let options = {};
+        if (MediaRecorder.isTypeSupported('video/mp4')) options = { mimeType: 'video/mp4' };
+        
+        try { mediaRecorder = new MediaRecorder(mediaStream, options); } 
+        catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
+
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+          isRecording = false;
+          finalizeRecording();
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        document.body.classList.add('recording');
+        
+        recordingStartTime = Date.now();
+        progressCircle.style.strokeDashoffset = circumference;
+        
+        const tick = () => {
+          if (!isRecording) return;
+          const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
+          progressCircle.style.strokeDashoffset = circumference * (1 - p);
+          if (p < 1) progressInterval = requestAnimationFrame(tick);
+          else stopRecording();
+        };
+        progressInterval = requestAnimationFrame(tick);
+      }
+
+      function stopRecording() {
+        if (isRecording && mediaRecorder) mediaRecorder.stop();
+      }
+
+      function finalizeRecording() {
+        if(progressInterval) cancelAnimationFrame(progressInterval);
+        document.body.classList.remove('recording');
+        progressCircle.style.strokeDashoffset = circumference;
+        stopTorch();
+        showPreview(recordedBlob);
+      }
+
+      // --- PREVIEW ---
+      function showPreview(blob) {
+        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
+        previewObjectURL = URL.createObjectURL(blob);
+        previewVideo.src = previewObjectURL;
+        
+        previewVideo.style.transform = "scaleX(1)"; // Reset miroir
+        
+        previewOverlay.classList.add('active');
+        document.body.classList.add('showing-preview');
+        
+        previewVideo.play().catch(()=>{});
+      }
+
+      function hidePreview() {
+        previewOverlay.classList.remove('active');
+        document.body.classList.remove('showing-preview');
+        previewVideo.pause();
+        previewVideo.src = '';
+        recordedChunks = [];
+        recordedBlob = null;
+        if(!mediaStream || !mediaStream.active) startCamera();
+      }
+
+      // --- FILE CHECK ---
+      function handleFile(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const v = document.createElement('video');
+        v.preload = 'metadata';
+        v.onloadedmetadata = function() {
+          window.URL.revokeObjectURL(v.src);
+          if (v.duration > 61) {
+            alert("Vidéo trop longue (max 60s).");
+            galleryInput.value = '';
+            return;
+          }
+          recordedBlob = file;
+          showPreview(file);
           galleryInput.value = '';
+        };
+        v.src = URL.createObjectURL(file);
+      }
+
+      // --- UPLOAD ---
+      function uploadToMux() {
+        const url = getUploadURL();
+        uploadOverlay.classList.add('active');
+        uploadText.textContent = "0%";
+
+        if (!url || !recordedBlob) {
+          uploadText.textContent = "Erreur URL";
+          setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
           return;
         }
-        recordedBlob = file;
-        showPreview(file);
-        galleryInput.value = '';
-      };
-      v.src = URL.createObjectURL(file);
-    }
 
-    // --- UPLOAD ---
-    function uploadToMux() {
-      const url = getUploadURL();
-      uploadOverlay.classList.add('active');
-      uploadText.textContent = "0%";
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url, true);
+        xhr.setRequestHeader('Content-Type', recordedBlob.type);
+        
+        xhr.upload.onprogress = e => {
+          if (e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%";
+        };
 
-      if (!url || !recordedBlob) {
-        uploadText.textContent = "Erreur URL";
-        setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
-        return;
+        xhr.onload = () => {
+          if (xhr.status < 300) {
+            uploadText.textContent = "Succès";
+            const assetId = url.split('/').pop().split('?')[0];
+            notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
+          } else {
+            uploadText.textContent = "Échec";
+            setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
+          }
+        };
+        xhr.onerror = () => {
+          uploadText.textContent = "Erreur";
+          setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
+        };
+        xhr.send(recordedBlob);
       }
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('PUT', url, true);
-      xhr.setRequestHeader('Content-Type', recordedBlob.type);
-      
-      xhr.upload.onprogress = e => {
-        if (e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%";
+      // --- CONTROLS ---
+      async function stopTorch() {
+        if (torchEnabled && mediaStream) {
+           try { await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:false}]}); } catch(e){}
+           torchEnabled = false;
+           flashBtn.classList.remove('flash-on');
+        }
+      }
+
+      flashBtn.onclick = async () => {
+         if (!mediaStream || !torchSupported) return;
+         try {
+           torchEnabled = !torchEnabled;
+           await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:torchEnabled}]});
+           flashBtn.classList.toggle('flash-on', torchEnabled);
+         } catch(e) { 
+           torchEnabled = !torchEnabled; 
+         }
       };
 
-      xhr.onload = () => {
-        if (xhr.status < 300) {
-          uploadText.textContent = "Succès";
-          const assetId = url.split('/').pop().split('?')[0];
-          notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
-        } else {
-          uploadText.textContent = "Échec";
-          setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
+      recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
+      
+      switchBtn.onclick = () => {
+        switchBtn.style.transform = "rotate(180deg)";
+        setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
+        facingMode = (facingMode === 'user') ? 'environment' : 'user';
+        startCamera();
+      };
+
+      galleryBtn.onclick = () => galleryInput.click();
+      galleryInput.onchange = handleFile;
+      restartBtn.onclick = hidePreview;
+      nextBtn.onclick = uploadToMux;
+      
+      previewOverlay.onclick = (e) => {
+        if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
+           previewVideo.paused ? previewVideo.play() : previewVideo.pause();
         }
       };
-      xhr.onerror = () => {
-        uploadText.textContent = "Erreur";
-        setTimeout(()=>uploadOverlay.classList.remove('active'), 2000);
-      };
-      xhr.send(recordedBlob);
-    }
 
-    // --- CONTROLS ---
-    async function stopTorch() {
-      if (torchEnabled && mediaStream) {
-         try { await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:false}]}); } catch(e){}
-         torchEnabled = false;
-         flashBtn.classList.remove('flash-on');
-      }
-    }
-
-    flashBtn.onclick = async () => {
-       if (!mediaStream || !torchSupported) return;
-       try {
-         torchEnabled = !torchEnabled;
-         await mediaStream.getVideoTracks()[0].applyConstraints({advanced:[{torch:torchEnabled}]});
-         flashBtn.classList.toggle('flash-on', torchEnabled);
-       } catch(e) { 
-         // Fallback si ça échoue (parfois le bouton s'active mais le hardware refuse)
-         torchEnabled = !torchEnabled;
-         console.log("Flash failed");
-       }
-    };
-
-    recordBtn.onclick = () => isRecording ? stopRecording() : startRecording();
-    
-    switchBtn.onclick = () => {
-      switchBtn.style.transform = "rotate(180deg)";
-      setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
-      facingMode = (facingMode === 'user') ? 'environment' : 'user';
+      // Démarrage sécurisé
       startCamera();
-    };
-
-    galleryBtn.onclick = () => galleryInput.click();
+    });
+  </script>
+</body>
+</html>
