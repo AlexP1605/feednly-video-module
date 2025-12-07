@@ -533,6 +533,10 @@
     }
 
     function resetPreviewState() {
+       if (previewTimeout) {
+           clearTimeout(previewTimeout);
+           previewTimeout = null;
+       }
        previewVideo.pause();
        previewVideo.src = '';
        if (previewObjectURL) {
@@ -585,10 +589,7 @@
     // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
        // Nettoyage complet pour éviter la réouverture de l'ancienne preview
-       if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; }
-       previewVideo.pause();
-       previewVideo.src = '';
-       recordedBlob = null;
+       resetPreviewState();
        hidePreview();
        shouldCheckDuration = false;
 
@@ -619,8 +620,7 @@
     // --- CORRECTION CLÉ : Double nettoyage de la vidéo de prévisualisation ---
     restartBtn.onclick = () => {
         // Nettoyage explicite AVANT d'appeler hidePreview pour vider la source
-        previewVideo.pause();
-        previewVideo.src = '';
+        resetPreviewState();
         hidePreview();
     };
     // --- FIN CORRECTION CLÉ ---
