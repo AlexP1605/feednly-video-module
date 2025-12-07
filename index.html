@@ -588,19 +588,37 @@
     
     // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
-       // Nettoyage complet pour éviter la réouverture de l'ancienne preview
-       resetPreviewState();
-       hidePreview();
-       shouldCheckDuration = false;
+        // 💥 STOP TOUTES LES ACTIONS EN COURS
+        if (previewTimeout) {
+            clearTimeout(previewTimeout);
+            previewTimeout = null;
+        }
 
-       if (mediaStream) {
-           mediaStream.getAudioTracks().forEach(track => {
-               track.stop();
-               mediaStream.removeTrack(track);
-           });
-       }
-       galleryInput.value = '';
-       galleryInput.click();
+        // 💥 VIDE IMMÉDIATEMENT TOUTES LES VARS QUI PEUVENT RELANCER UNE PREVIEW
+        recordedBlob = null;
+        shouldCheckDuration = false;
+
+        // 💥 VIDE LES SOURCES VIDÉO AVANT hidePreview()
+        previewVideo.pause();
+        previewVideo.src = '';
+        if (previewObjectURL) {
+            URL.revokeObjectURL(previewObjectURL);
+            previewObjectURL = null;
+        }
+
+        // 💥 MAINTENANT on peut cacher la preview
+        hidePreview();
+
+        // 💥 On s’assure que le flux audio ne réutilise rien
+        if (mediaStream) {
+            mediaStream.getAudioTracks().forEach(track => track.stop());
+        }
+
+        // 💥 Reset du champ input
+        galleryInput.value = '';
+
+        // Ouvre la galerie
+        galleryInput.click();
     };
     
     function handleFileSelect(e) {
