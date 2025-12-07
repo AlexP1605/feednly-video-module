@@ -219,8 +219,8 @@
     let torchSupported = false;
     let torchEnabled = false;
     let uploadURL = '';
-    
-    let timerDuration = 0; 
+
+    let timerDuration = 0;
     let isCountingDown = false;
     let shouldCheckDuration = false;
     let isToggleLocked = false;
@@ -233,6 +233,7 @@
     const circumference = 2 * Math.PI * 46;
     let recordingStartTime = 0;
     let progressInterval = null;
+    let previewTimeout = null;
     
     progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
     progressCircle.style.strokeDashoffset = circumference;
@@ -510,7 +511,8 @@
        progressCircle.style.strokeDashoffset = circumference;
        if (torchEnabled) toggleFlash();
        shouldCheckDuration = false;
-       setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
+       if (previewTimeout) clearTimeout(previewTimeout);
+       previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
     }
 
     function showPreview(blob) {
@@ -583,6 +585,7 @@
     // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
     galleryBtn.onclick = () => {
        // Nettoyage complet pour éviter la réouverture de l'ancienne preview
+       if (previewTimeout) { clearTimeout(previewTimeout); previewTimeout = null; }
        previewVideo.pause();
        previewVideo.src = '';
        recordedBlob = null;
@@ -608,7 +611,7 @@
        recordedBlob = file;
        shouldCheckDuration = true;
        showPreview(file);
-       e.target.value = ''; 
+       e.target.value = '';
     }
 
     galleryInput.onchange = handleFileSelect;
