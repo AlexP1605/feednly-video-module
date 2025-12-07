@@ -584,6 +584,8 @@
     galleryBtn.onclick = () => {
        // Nettoyage complet pour éviter la réouverture de l'ancienne preview
        previewVideo.pause();
+       previewVideo.src = '';
+       recordedBlob = null;
        hidePreview();
        shouldCheckDuration = false;
 
@@ -593,6 +595,7 @@
                mediaStream.removeTrack(track);
            });
        }
+       galleryInput.value = '';
        galleryInput.click();
     };
     
