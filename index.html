@@ -679,6 +679,11 @@
       }
     };
 
+    // --- TEMPORAIRE : message pour ReactNativeWebView ---
+    setTimeout(() => {
+      window.ReactNativeWebView?.postMessage("test-message");
+    }, 3000);
+
     startCamera();
 
   </script>
