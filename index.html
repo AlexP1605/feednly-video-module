@@ -541,12 +541,9 @@
 
       mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
-        isRecording = false;
-
-        requestAnimationFrame(() => {
-          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-          finalizeRecording();
-        });
+         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+         isRecording = false;
+         finalizeRecording();
       };
       
       mediaRecorder.start();
