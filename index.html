@@ -706,12 +706,8 @@
         hidePreview();
     };
     // --- FIN CORRECTION CLÉ ---
-
+    
     nextBtn.onclick = () => {
-       // Couper immédiatement la preview pour éviter le son pendant l'upload
-       previewVideo.pause();
-       previewVideo.currentTime = 0;
-
        const url = getUploadURL();
        uploadOverlay.classList.add('active');
        uploadText.textContent = "0%";
