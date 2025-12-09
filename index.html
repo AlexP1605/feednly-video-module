@@ -522,28 +522,32 @@
       recordedFacingMode = facingMode; 
       recordedChunks = [];
       
-      let options = {
-         mimeType: 'video/mp4',
-         videoBitsPerSecond: 2500000 
-      };
-      
-      if (!MediaRecorder.isTypeSupported('video/mp4')) {
-          options = { videoBitsPerSecond: 2500000 };
-      }
+        let options = {
+           mimeType: 'video/mp4',
+           videoBitsPerSecond: 2500000
+        };
 
-      const streamForRecording = getRecordingStream();
+        if (!MediaRecorder.isTypeSupported('video/mp4')) {
+            options = { videoBitsPerSecond: 2500000 };
+        }
 
-      try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
-      catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
+        const streamForRecording = getRecordingStream();
 
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = () => {
-         setTimeout(() => {
-           recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-           isRecording = false;
-           finalizeRecording();
-         }, 0);
-      };
+        try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
+        catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
+
+        const activeRecorder = mediaRecorder;
+        const activeMimeType = activeRecorder.mimeType || options.mimeType || 'video/webm';
+
+        activeRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        activeRecorder.onstop = () => {
+           setTimeout(() => {
+             recordedBlob = new Blob(recordedChunks, { type: activeMimeType });
+             isRecording = false;
+             mediaRecorder = null;
+             finalizeRecording();
+           }, 0);
+        };
       
       mediaRecorder.start();
       isRecording = true;
@@ -562,21 +566,20 @@
       progressInterval = requestAnimationFrame(tick);
     }
 
-    function stopRecording() {
-       const mr = mediaRecorder;
-       mediaRecorder = null; // évite lag lié à l'objet recorder
+      function stopRecording() {
+         const recorder = mediaRecorder;
+         if (!recorder) return;
 
-       requestAnimationFrame(() => {
-           if (mr && mr.state === "recording") mr.stop();
-       });
+         requestAnimationFrame(() => {
+             if (recorder.state === "recording") recorder.stop();
+         });
 
-       if (mr && mr.state === 'recording') {
-           return;
-       } else if (isRecording) {
-           isRecording = false;
-           finalizeRecording();
-       }
-    }
+         if (recorder.state !== 'recording' && isRecording) {
+             isRecording = false;
+             mediaRecorder = null;
+             finalizeRecording();
+         }
+      }
 
     function finalizeRecording() {
        if(progressInterval) cancelAnimationFrame(progressInterval);
