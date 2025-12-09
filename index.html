@@ -238,6 +238,7 @@
     let isToggleLocked = false;
     let isSwitching = false;
     let recordingStream = null;
+    let internalRecordingCanvas = null;
     let stopCanvasDrawing = null;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
@@ -421,7 +422,7 @@
     }
 
     function getRecordingStream() {
-      if (!recordingCanvas) return mediaStream;
+      if (!mediaStream) return mediaStream;
 
       if (recordingStream) {
         recordingStream.getTracks().forEach(t => t.stop());
@@ -431,31 +432,27 @@
         stopCanvasDrawing = null;
       }
 
-      const ctx = recordingCanvas.getContext('2d');
-      const updateCanvasSize = () => {
-        if (cameraPreview.videoWidth && cameraPreview.videoHeight) {
-          if (recordingCanvas.width !== cameraPreview.videoWidth || recordingCanvas.height !== cameraPreview.videoHeight) {
-            recordingCanvas.width = cameraPreview.videoWidth;
-            recordingCanvas.height = cameraPreview.videoHeight;
-          }
-        }
-      };
+      const trackSettings = mediaStream.getVideoTracks()?.[0]?.getSettings?.() || {};
+      const width = cameraPreview.videoWidth || trackSettings.width || cameraPreview.clientWidth || 0;
+      const height = cameraPreview.videoHeight || trackSettings.height || cameraPreview.clientHeight || 0;
+      if (!width || !height) {
+        requestAnimationFrame(() => getRecordingStream());
+        return;
+      }
+      const scaleX = facingMode === 'user' ? -1 : 1;
+      const drawX = scaleX === -1 ? -width : 0;
+
+      internalRecordingCanvas = document.createElement('canvas');
+      internalRecordingCanvas.width = width;
+      internalRecordingCanvas.height = height;
+      const ctx = internalRecordingCanvas.getContext('2d');
 
       let drawing = true;
       const drawFrame = () => {
         if (!drawing) return;
-        updateCanvasSize();
-        if (!recordingCanvas.width || !recordingCanvas.height) {
-          requestAnimationFrame(drawFrame);
-          return;
-        }
         ctx.save();
-        ctx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
-        if (facingMode === 'user') {
-          ctx.translate(recordingCanvas.width, 0);
-          ctx.scale(-1, 1);
-        }
-        ctx.drawImage(cameraPreview, 0, 0, recordingCanvas.width, recordingCanvas.height);
+        ctx.scale(scaleX, 1);
+        ctx.drawImage(cameraPreview, drawX, 0, width, height);
         ctx.restore();
         requestAnimationFrame(drawFrame);
       };
@@ -464,7 +461,7 @@
 
       stopCanvasDrawing = () => { drawing = false; };
 
-      recordingStream = recordingCanvas.captureStream(30);
+      recordingStream = internalRecordingCanvas.captureStream(30);
       if (mediaStream) {
         mediaStream.getAudioTracks().forEach(track => recordingStream.addTrack(track));
       }
@@ -541,9 +538,11 @@
 
       mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
-         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-         isRecording = false;
-         finalizeRecording();
+         setTimeout(() => {
+           recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+           isRecording = false;
+           finalizeRecording();
+         }, 0);
       };
       
       mediaRecorder.start();
@@ -564,8 +563,15 @@
     }
 
     function stopRecording() {
-       if (mediaRecorder && mediaRecorder.state === 'recording') {
-           mediaRecorder.stop();
+       const mr = mediaRecorder;
+       mediaRecorder = null; // évite lag lié à l'objet recorder
+
+       requestAnimationFrame(() => {
+           if (mr && mr.state === "recording") mr.stop();
+       });
+
+       if (mr && mr.state === 'recording') {
+           return;
        } else if (isRecording) {
            isRecording = false;
            finalizeRecording();
@@ -579,6 +585,7 @@
        if (torchEnabled) toggleFlash();
        if (stopCanvasDrawing) { stopCanvasDrawing(); stopCanvasDrawing = null; }
        if (recordingStream) { recordingStream.getTracks().forEach(t => t.stop()); recordingStream = null; }
+       internalRecordingCanvas = null;
        shouldCheckDuration = false;
        if (previewTimeout) clearTimeout(previewTimeout);
        previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
@@ -589,7 +596,7 @@
        previewObjectURL = URL.createObjectURL(blob);
        previewVideo.src = previewObjectURL;
 
-       previewVideo.style.transform = "scaleX(1)";
+       previewVideo.style.transform = recordedFacingMode === 'user' ? "scaleX(-1)" : "scaleX(1)";
        
        previewOverlay.classList.add('active');
        document.body.classList.add('showing-preview');
