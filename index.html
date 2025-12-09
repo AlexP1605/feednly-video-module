@@ -244,7 +244,10 @@
       recordingStartTime: 0,
       progressInterval: null,
       previewTimeout: null,
-      drawLoopId: null
+      drawLoopId: null,
+      firstFramePromise: null,
+      hasFirstFrame: false,
+      canvasReadyPromise: null
     };
 
     const circumference = 2 * Math.PI * 46;
@@ -263,6 +266,32 @@
         startCamera();
       }
     });
+
+    function waitForFirstFrame() {
+      if (state.hasFirstFrame && DOM['camera-preview'].videoWidth > 0 && DOM['camera-preview'].videoHeight > 0) {
+        return Promise.resolve();
+      }
+
+      if (!state.firstFramePromise) {
+        DOM['camera-preview'].style.objectFit = 'contain';
+        state.firstFramePromise = new Promise(resolve => {
+          const checkReady = () => {
+            const vw = DOM['camera-preview'].videoWidth;
+            const vh = DOM['camera-preview'].videoHeight;
+            if (vw > 0 && vh > 0) {
+              state.hasFirstFrame = true;
+              DOM['camera-preview'].style.objectFit = 'cover';
+              resolve();
+              return;
+            }
+            requestAnimationFrame(checkReady);
+          };
+          checkReady();
+        });
+      }
+
+      return state.firstFramePromise;
+    }
 
     function playBeep(freq = 800, type = 'short') {
       if (!audioCtx) return;
@@ -412,6 +441,9 @@
       stopMediaStream();
 
       try {
+        state.hasFirstFrame = false;
+        state.firstFramePromise = null;
+        DOM['camera-preview'].style.objectFit = 'contain';
         const stream = await navigator.mediaDevices.getUserMedia(buildConstraints());
         state.mediaStream = stream;
         state.activeFacing = state.facingMode;
@@ -451,7 +483,7 @@
       }
     }
 
-    function getRecordingStream() {
+    async function getRecordingStream() {
       if (!DOM['recording-canvas']) return state.mediaStream;
 
       clearCanvasStream();
@@ -480,6 +512,7 @@
         state.drawLoopId = requestAnimationFrame(drawFrame);
         if (document.visibilityState === 'hidden') return;
         if (!updateCanvasSize()) return;
+        if (!canvas.width || !canvas.height) return;
 
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -489,6 +522,9 @@
         ctx.drawImage(DOM['camera-preview'], 0, 0, canvas.width, canvas.height);
       };
 
+      state.canvasReadyPromise = waitForFirstFrame();
+      await state.canvasReadyPromise;
+      updateCanvasSize();
       drawing = true;
       state.drawLoopId = requestAnimationFrame(drawFrame);
       state.stopCanvasDrawing = () => { drawing = false; };
@@ -553,21 +589,23 @@
         return;
       }
 
+      await waitForFirstFrame();
+
       state.recordedFacingMode = state.facingMode;
       state.recordedChunks = [];
 
       let options = { mimeType: 'video/mp4', videoBitsPerSecond: 2500000 };
       if (!MediaRecorder.isTypeSupported('video/mp4')) options = { videoBitsPerSecond: 2500000 };
 
-      const streamForRecording = getRecordingStream();
+      const streamForRecording = await getRecordingStream();
       try { state.mediaRecorder = new MediaRecorder(streamForRecording, options); }
       catch (e) { state.mediaRecorder = new MediaRecorder(streamForRecording); }
 
       state.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.recordedChunks.push(e.data); };
-      state.mediaRecorder.onstop = () => {
+      state.mediaRecorder.onstop = async () => {
         state.recordedBlob = new Blob(state.recordedChunks, { type: state.mediaRecorder.mimeType });
         state.isRecording = false;
-        finalizeRecording();
+        await finalizeRecording();
       };
 
       state.mediaRecorder.start();
@@ -596,7 +634,10 @@
       }
     }
 
-    function finalizeRecording() {
+    async function finalizeRecording() {
+      if (state.canvasReadyPromise) {
+        try { await state.canvasReadyPromise; } catch (e) {}
+      }
       if (state.progressInterval) cancelAnimationFrame(state.progressInterval);
       document.body.classList.remove('recording');
       DOM['record-progress-circle'].style.strokeDashoffset = circumference;
