@@ -193,106 +193,128 @@
   <input type="file" id="camera-input" accept="video/*" capture="environment" />
   <input type="file" id="galleryInput" accept="video/*" />
 
+  
   <script>
-    const cameraPreview = document.getElementById('camera-preview');
-    const previewVideo = document.getElementById('preview-video');
-    const previewOverlay = document.getElementById('preview-overlay');
-    const recordWrapBtn = document.getElementById('record-wrap-btn');
-    const flashBtn = document.getElementById('flash-btn');
-    const flashIconPath = document.getElementById('flash-icon-path');
-    const switchBtn = document.getElementById('switch-btn');
-    const timerBtn = document.getElementById('timer-btn');
-    const timerText = document.getElementById('timer-text');
-    const countdownDisplay = document.getElementById('countdown-display');
-    const galleryBtn = document.getElementById('gallery-btn');
-    const restartBtn = document.getElementById('restart-button');
-    const nextBtn = document.getElementById('next-button');
-    const galleryInput = document.getElementById('galleryInput');
-    const uploadOverlay = document.getElementById('upload-overlay');
-    const uploadText = document.getElementById('upload-text');
-    const progressCircle = document.getElementById('record-progress-circle');
-    const errorToast = document.getElementById('error-toast');
-    const recordingCanvas = document.getElementById('recording-canvas');
+    const DOM_IDS = [
+      'camera-preview', 'preview-video', 'preview-overlay', 'record-wrap-btn',
+      'flash-btn', 'flash-icon-path', 'switch-btn', 'timer-btn', 'timer-text',
+      'countdown-display', 'gallery-btn', 'restart-button', 'next-button',
+      'galleryInput', 'upload-overlay', 'upload-text', 'record-progress-circle',
+      'error-toast', 'recording-canvas'
+    ];
 
-    cameraPreview.onplaying = () => {
-      cameraPreview.style.opacity = "1";
-    };
+    const DOM = DOM_IDS.reduce((acc, id) => {
+      acc[id] = document.getElementById(id);
+      return acc;
+    }, {});
 
-    let mediaStream = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
-    let isRecording = false;
-    let recordedBlob = null;
-    let previewObjectURL = null;
-    
-    let facingMode = 'environment';
-    let recordedFacingMode = 'environment';
-    let torchSupported = false;
-    let torchEnabled = false;
-    let uploadURL = '';
-
-    let timerDuration = 0;
-    let isCountingDown = false;
-    let shouldCheckDuration = false;
-    let isToggleLocked = false;
-    let isSwitching = false;
-    let recordingStream = null;
-    let stopCanvasDrawing = null;
-
+    const controls = document.querySelector('.controls');
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
 
-    const MAX_DURATION = 60000;
+    const CONFIG = {
+      video: { width: 1920, height: 1080, frameRate: 30 },
+      audio: { echoCancellation: true, noiseSuppression: true },
+      maxDuration: 60000,
+      countdownOpacity: { dimmed: '0.5', normal: '1' },
+      canvasFPS: 30,
+      torchCheckDelay: 300
+    };
+
+    const state = {
+      mediaStream: null,
+      mediaRecorder: null,
+      recordedChunks: [],
+      recordedBlob: null,
+      previewObjectURL: null,
+      facingMode: 'environment',
+      recordedFacingMode: 'environment',
+      activeFacing: null,
+      torchSupported: false,
+      torchEnabled: false,
+      uploadURL: '',
+      timerDuration: 0,
+      isCountingDown: false,
+      isToggleLocked: false,
+      isSwitching: false,
+      isRecording: false,
+      shouldCheckDuration: false,
+      recordingStream: null,
+      stopCanvasDrawing: null,
+      recordingStartTime: 0,
+      progressInterval: null,
+      previewTimeout: null,
+      drawLoopId: null,
+      firstFramePromise: null,
+      hasFirstFrame: false,
+      canvasReadyPromise: null
+    };
+
     const circumference = 2 * Math.PI * 46;
-    let recordingStartTime = 0;
-    let progressInterval = null;
-    let previewTimeout = null;
-    
-    progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-    progressCircle.style.strokeDashoffset = circumference;
+    DOM['record-progress-circle'].style.strokeDasharray = `${circumference} ${circumference}`;
+    DOM['record-progress-circle'].style.strokeDashoffset = circumference;
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    let audioCtx = new AudioContext();
+    const audioCtx = new AudioContext();
 
-    // --- Optimisation Fluidité (Gérer la visibilité de la page) ---
+    DOM['camera-preview'].onplaying = () => { DOM['camera-preview'].style.opacity = '1'; };
+
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') {
-            if (!isRecording && !isCountingDown) {
-                if (mediaStream) {
-                    mediaStream.getTracks().forEach(track => track.stop());
-                    mediaStream = null;
-                }
-            }
-        } else {
-            if (!mediaStream && !isRecording && !isCountingDown) {
-                startCamera();
-            }
-        }
+      if (document.visibilityState === 'hidden') {
+        if (!state.isRecording && !state.isCountingDown) stopMediaStream();
+      } else if (!state.mediaStream && !state.isRecording && !state.isCountingDown) {
+        startCamera();
+      }
     });
 
+    function waitForFirstFrame() {
+      if (state.hasFirstFrame && DOM['camera-preview'].videoWidth > 0 && DOM['camera-preview'].videoHeight > 0) {
+        return Promise.resolve();
+      }
+
+      if (!state.firstFramePromise) {
+        DOM['camera-preview'].style.objectFit = 'contain';
+        state.firstFramePromise = new Promise(resolve => {
+          const checkReady = () => {
+            const vw = DOM['camera-preview'].videoWidth;
+            const vh = DOM['camera-preview'].videoHeight;
+            if (vw > 0 && vh > 0) {
+              state.hasFirstFrame = true;
+              DOM['camera-preview'].style.objectFit = 'cover';
+              resolve();
+              return;
+            }
+            requestAnimationFrame(checkReady);
+          };
+          checkReady();
+        });
+      }
+
+      return state.firstFramePromise;
+    }
+
     function playBeep(freq = 800, type = 'short') {
-       if (!audioCtx) return;
-       if (audioCtx.state === 'suspended') {
-           audioCtx.resume().catch(e => console.log(e));
-       }
-       const osc = audioCtx.createOscillator();
-       const gain = audioCtx.createGain();
-       osc.connect(gain);
-       gain.connect(audioCtx.destination);
-       osc.type = 'sine';
-       osc.frequency.value = freq;
-       gain.gain.value = 0.5; 
-       const now = audioCtx.currentTime;
-       osc.start(now);
-       const duration = (type === 'long') ? 0.6 : 0.1;
-       osc.stop(now + duration);
-       setTimeout(() => { osc.disconnect(); gain.disconnect(); }, 1000);
+      if (!audioCtx) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.5;
+      const now = audioCtx.currentTime;
+      osc.start(now);
+      const duration = type === 'long' ? 0.6 : 0.1;
+      osc.stop(now + duration);
+      setTimeout(() => { osc.disconnect(); gain.disconnect(); }, 300);
     }
 
     function showError(msg) {
-        errorToast.textContent = msg;
-        errorToast.classList.add('active');
-        setTimeout(() => { errorToast.classList.remove('active'); }, 4000);
+      DOM['error-toast'].textContent = msg;
+      DOM['error-toast'].classList.add('active');
+      setTimeout(() => DOM['error-toast'].classList.remove('active'), 4000);
     }
 
     function notifyHost(payload) {
@@ -305,441 +327,466 @@
 
     function getUploadURL() {
       const p = new URLSearchParams(window.location.search);
-      let u = uploadURL || p.get('upload_url') || p.get('url');
-      if(!u) try { u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url'); } catch(e){}
+      let u = state.uploadURL || p.get('upload_url') || p.get('url');
+      if (!u) {
+        try {
+          u = new URLSearchParams(window.frameElement?.src?.split('?')[1]).get('upload_url');
+        } catch (e) {}
+      }
       return u;
     }
 
+    function stopMediaStream() {
+      if (!state.mediaStream) return;
+      state.mediaStream.getTracks().forEach(track => track.stop());
+      state.mediaStream = null;
+    }
+
     function updateFlashUI() {
-      const isBack = facingMode === 'environment';
+      const isBack = state.facingMode === 'environment';
+      const btn = DOM['flash-btn'];
+      const path = DOM['flash-icon-path'];
       if (!isBack) {
-         flashBtn.classList.add('disabled');
-         flashBtn.classList.remove('flash-on');
-         flashIconPath.setAttribute('d', PATH_FLASH_OFF);
-         return;
-      } 
-      flashBtn.classList.remove('disabled');
-      if (torchEnabled) {
-         flashBtn.classList.add('flash-on');
-         flashIconPath.setAttribute('d', PATH_FLASH_ON);
+        btn.classList.add('disabled');
+        btn.classList.remove('flash-on');
+        path.setAttribute('d', PATH_FLASH_OFF);
+        return;
+      }
+      btn.classList.remove('disabled');
+      if (state.torchEnabled) {
+        btn.classList.add('flash-on');
+        path.setAttribute('d', PATH_FLASH_ON);
       } else {
-         flashBtn.classList.remove('flash-on');
-         flashIconPath.setAttribute('d', PATH_FLASH_OFF);
+        btn.classList.remove('flash-on');
+        path.setAttribute('d', PATH_FLASH_OFF);
       }
     }
 
     async function toggleFlash() {
-      if (!mediaStream || facingMode !== 'environment') return;
-      const track = mediaStream.getVideoTracks()[0];
-      torchEnabled = !torchEnabled;
-      try { await track.applyConstraints({ advanced: [{ torch: torchEnabled }] }); } 
-      catch (err) { }
+      if (!state.mediaStream || state.facingMode !== 'environment') return;
+      const track = state.mediaStream.getVideoTracks()[0];
+      state.torchEnabled = !state.torchEnabled;
+      try {
+        await track.applyConstraints({ advanced: [{ torch: state.torchEnabled }] });
+      } catch (err) {}
       updateFlashUI();
     }
 
-    timerBtn.onclick = () => {
-      if (isRecording || isCountingDown) return;
-      if (timerDuration === 0) timerDuration = 5;
-      else if (timerDuration === 5) timerDuration = 10;
-      else timerDuration = 0;
+    function handleTimerClick() {
+      if (state.isRecording || state.isCountingDown) return;
+      if (state.timerDuration === 0) state.timerDuration = 5;
+      else if (state.timerDuration === 5) state.timerDuration = 10;
+      else state.timerDuration = 0;
 
-      if (timerDuration === 0) {
-        timerText.textContent = "OFF";
-        timerBtn.classList.remove('active');
+      if (state.timerDuration === 0) {
+        DOM['timer-text'].textContent = 'OFF';
+        DOM['timer-btn'].classList.remove('active');
       } else {
-        timerText.textContent = timerDuration + "s";
-        timerBtn.classList.add('active');
+        DOM['timer-text'].textContent = `${state.timerDuration}s`;
+        DOM['timer-btn'].classList.add('active');
       }
-    };
+    }
+
+    function setControlsOpacity(value) {
+      if (controls) controls.style.opacity = value;
+    }
 
     function startCountdownAndRecord() {
-      if (isCountingDown) return;
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+      if (state.isCountingDown) return;
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
 
-      isCountingDown = true;
-      let count = timerDuration;
-      document.querySelector('.controls').style.opacity = '0.5';
-      countdownDisplay.textContent = count;
-      countdownDisplay.classList.add('active');
-      
+      state.isCountingDown = true;
+      let count = state.timerDuration;
+      setControlsOpacity(CONFIG.countdownOpacity.dimmed);
+      DOM['countdown-display'].textContent = count;
+      DOM['countdown-display'].classList.add('active');
       playBeep(1000, 'short');
 
       const interval = setInterval(() => {
-        count--;
-        
-        if (count > 1) { 
-          countdownDisplay.textContent = count;
+        count -= 1;
+
+        if (count > 1) {
+          DOM['countdown-display'].textContent = count;
           playBeep(1000, 'short');
-        } else if (count === 1) {
-          countdownDisplay.textContent = count;
-          playBeep(1500, 'long'); 
-        } else {
-          clearInterval(interval);
-          countdownDisplay.classList.remove('active');
-          document.querySelector('.controls').style.opacity = '1';
-          isCountingDown = false;
-          startRecording();
+          return;
         }
+
+        if (count === 1) {
+          DOM['countdown-display'].textContent = count;
+          playBeep(1500, 'long');
+          return;
+        }
+
+        clearInterval(interval);
+        DOM['countdown-display'].classList.remove('active');
+        setControlsOpacity(CONFIG.countdownOpacity.normal);
+        state.isCountingDown = false;
+        startRecording();
       }, 1000);
     }
 
-    async function startCamera() {
-      if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-      
-      const constraints = {
-        audio: true,
-        video: { 
-            facingMode: facingMode,
-            width: { ideal: 1920, max: 1920 },
-            height: { ideal: 1080, max: 1080 }
+    function buildConstraints() {
+      return {
+        audio: { ...CONFIG.audio },
+        video: {
+          facingMode: state.facingMode,
+          width: { ideal: CONFIG.video.width, max: CONFIG.video.width },
+          height: { ideal: CONFIG.video.height, max: CONFIG.video.height }
         }
       };
+    }
+
+    async function startCamera() {
+      if (state.mediaStream && state.mediaStream.active && state.facingMode === state.activeFacing) return;
+      stopMediaStream();
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        mediaStream = stream;
-        
-        cameraPreview.srcObject = null;
-        cameraPreview.srcObject = mediaStream;
-        
-        cameraPreview.play().catch(e=>{});
-        
-        cameraPreview.style.transform = (facingMode === 'user') ? "scaleX(-1)" : "scaleX(1)";
+        state.hasFirstFrame = false;
+        state.firstFramePromise = null;
+        DOM['camera-preview'].style.objectFit = 'contain';
+        const stream = await navigator.mediaDevices.getUserMedia(buildConstraints());
+        state.mediaStream = stream;
+        state.activeFacing = state.facingMode;
 
-        torchEnabled = false;
+        if (DOM['camera-preview'].srcObject !== stream) {
+          DOM['camera-preview'].srcObject = stream;
+        }
+        DOM['camera-preview'].play().catch(() => {});
+        DOM['camera-preview'].style.transform = state.facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+
+        state.torchEnabled = false;
         updateFlashUI();
-        
-        setTimeout(() => {
-           const track = mediaStream.getVideoTracks()[0];
-           const caps = track.getCapabilities ? track.getCapabilities() : {};
-           torchSupported = !!caps.torch;
-           updateFlashUI();
-        }, 300);
 
-      } catch (error) { console.error(error); }
+        setTimeout(() => {
+          const track = state.mediaStream?.getVideoTracks?.()[0];
+          const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+          state.torchSupported = !!caps?.torch;
+          updateFlashUI();
+        }, CONFIG.torchCheckDelay);
+      } catch (error) {
+        console.error(error);
+      }
     }
 
-    function getRecordingStream() {
-      if (!recordingCanvas) return mediaStream;
-
-      if (recordingStream) {
-        recordingStream.getTracks().forEach(t => t.stop());
+    function clearCanvasStream() {
+      if (state.stopCanvasDrawing) {
+        state.stopCanvasDrawing();
+        state.stopCanvasDrawing = null;
       }
-      if (stopCanvasDrawing) {
-        stopCanvasDrawing();
-        stopCanvasDrawing = null;
+      if (state.recordingStream) {
+        state.recordingStream.getTracks().forEach(t => t.stop());
+        state.recordingStream = null;
       }
+      if (state.drawLoopId) {
+        cancelAnimationFrame(state.drawLoopId);
+        state.drawLoopId = null;
+      }
+    }
 
-      const ctx = recordingCanvas.getContext('2d');
+    async function getRecordingStream() {
+      if (!DOM['recording-canvas']) return state.mediaStream;
+
+      clearCanvasStream();
+
+      const canvas = DOM['recording-canvas'];
+      const ctx = canvas.getContext('2d');
+      let cachedWidth = 0;
+      let cachedHeight = 0;
+      let drawing = true;
+
       const updateCanvasSize = () => {
-        if (cameraPreview.videoWidth && cameraPreview.videoHeight) {
-          if (recordingCanvas.width !== cameraPreview.videoWidth || recordingCanvas.height !== cameraPreview.videoHeight) {
-            recordingCanvas.width = cameraPreview.videoWidth;
-            recordingCanvas.height = cameraPreview.videoHeight;
-          }
+        const vw = DOM['camera-preview'].videoWidth;
+        const vh = DOM['camera-preview'].videoHeight;
+        if (!vw || !vh) return false;
+        if (vw !== cachedWidth || vh !== cachedHeight) {
+          cachedWidth = vw;
+          cachedHeight = vh;
+          canvas.width = vw;
+          canvas.height = vh;
         }
+        return true;
       };
 
-      let drawing = true;
       const drawFrame = () => {
         if (!drawing) return;
-        updateCanvasSize();
-        if (!recordingCanvas.width || !recordingCanvas.height) {
-          requestAnimationFrame(drawFrame);
-          return;
+        state.drawLoopId = requestAnimationFrame(drawFrame);
+        if (document.visibilityState === 'hidden') return;
+        if (!updateCanvasSize()) return;
+        if (!canvas.width || !canvas.height) return;
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (state.facingMode === 'user') {
+          ctx.setTransform(-1, 0, 0, 1, canvas.width, 0);
         }
-        ctx.save();
-        ctx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
-        if (facingMode === 'user') {
-          ctx.translate(recordingCanvas.width, 0);
-          ctx.scale(-1, 1);
-        }
-        ctx.drawImage(cameraPreview, 0, 0, recordingCanvas.width, recordingCanvas.height);
-        ctx.restore();
-        requestAnimationFrame(drawFrame);
+        ctx.drawImage(DOM['camera-preview'], 0, 0, canvas.width, canvas.height);
       };
 
-      drawFrame();
+      state.canvasReadyPromise = waitForFirstFrame();
+      await state.canvasReadyPromise;
+      updateCanvasSize();
+      drawing = true;
+      state.drawLoopId = requestAnimationFrame(drawFrame);
+      state.stopCanvasDrawing = () => { drawing = false; };
 
-      stopCanvasDrawing = () => { drawing = false; };
-
-      recordingStream = recordingCanvas.captureStream(30);
-      if (mediaStream) {
-        mediaStream.getAudioTracks().forEach(track => recordingStream.addTrack(track));
+      state.recordingStream = canvas.captureStream(CONFIG.canvasFPS);
+      if (state.mediaStream) {
+        state.mediaStream.getAudioTracks().forEach(track => state.recordingStream.addTrack(track));
       }
-      return recordingStream;
+      return state.recordingStream;
     }
-    
+
     async function addAudioTrack(currentStream) {
-        if (!navigator.mediaDevices || !currentStream) return false;
-        try {
-            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            const audioTrack = audioStream.getAudioTracks()[0];
-            currentStream.addTrack(audioTrack);
-            return true;
-        } catch (error) {
-            console.error("Erreur lors de l'ajout du micro:", error);
-            return false;
-        }
-    }
-    
-    // --- LOGIQUE BOUTON ROBUSTE ---
-    recordWrapBtn.onclick = (e) => {
-      e.stopPropagation();
-      if (isToggleLocked) return;
-      isToggleLocked = true;
-      setTimeout(() => { isToggleLocked = false; }, 300);
-
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
-
-      if (isRecording) {
-        stopRecording();
-      } else {
-        if (timerDuration > 0) startCountdownAndRecord();
-        else startRecording();
+      if (!navigator.mediaDevices || !currentStream) return false;
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: { ...CONFIG.audio }, video: false });
+        const audioTrack = audioStream.getAudioTracks()[0];
+        currentStream.addTrack(audioTrack);
+        return true;
+      } catch (error) {
+        console.error("Erreur lors de l'ajout du micro:", error);
+        return false;
       }
-    };
+    }
+
+    function lockToggleTemporarily() {
+      state.isToggleLocked = true;
+      setTimeout(() => { state.isToggleLocked = false; }, 300);
+    }
+
+    function handleRecordToggle(e) {
+      e.stopPropagation();
+      if (state.isToggleLocked) return;
+      lockToggleTemporarily();
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+
+      if (state.isRecording) {
+        stopRecording();
+      } else if (state.timerDuration > 0) {
+        startCountdownAndRecord();
+      } else {
+        startRecording();
+      }
+    }
+
+    async function ensureAudioReady() {
+      const audioMissing = !state.mediaStream || state.mediaStream.getAudioTracks().length === 0;
+      if (!audioMissing) return true;
+
+      const videoExists = state.mediaStream && state.mediaStream.getVideoTracks().length > 0;
+      if (videoExists) {
+        const added = await addAudioTrack(state.mediaStream);
+        if (added) return true;
+      }
+      await startCamera();
+      return !!(state.mediaStream && state.mediaStream.getAudioTracks().length > 0);
+    }
 
     async function startRecording() {
-      const audioMissing = !mediaStream || mediaStream.getAudioTracks().length === 0;
+      const ready = await ensureAudioReady();
+      if (state.isRecording || !ready) {
+        showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
+        return;
+      }
 
-      if (audioMissing) {
-        const videoExists = mediaStream && mediaStream.getVideoTracks().length > 0;
-        
-        if (videoExists) {
-            const added = await addAudioTrack(mediaStream);
-            if (!added) {
-                await startCamera();
-            }
-        } else {
-             await startCamera();
-        }
-      }
-      
-      if (isRecording || !mediaStream || mediaStream.getAudioTracks().length === 0) {
-          showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
-          return;
-      }
-      
-      recordedFacingMode = facingMode; 
-      recordedChunks = [];
-      
-      let options = {
-         mimeType: 'video/mp4',
-         videoBitsPerSecond: 2500000 
+      await waitForFirstFrame();
+
+      state.recordedFacingMode = state.facingMode;
+      state.recordedChunks = [];
+
+      let options = { mimeType: 'video/mp4', videoBitsPerSecond: 2500000 };
+      if (!MediaRecorder.isTypeSupported('video/mp4')) options = { videoBitsPerSecond: 2500000 };
+
+      const streamForRecording = await getRecordingStream();
+      try { state.mediaRecorder = new MediaRecorder(streamForRecording, options); }
+      catch (e) { state.mediaRecorder = new MediaRecorder(streamForRecording); }
+
+      state.mediaRecorder.ondataavailable = e => { if (e.data.size > 0) state.recordedChunks.push(e.data); };
+      state.mediaRecorder.onstop = async () => {
+        state.recordedBlob = new Blob(state.recordedChunks, { type: state.mediaRecorder.mimeType });
+        state.isRecording = false;
+        await finalizeRecording();
       };
-      
-      if (!MediaRecorder.isTypeSupported('video/mp4')) {
-          options = { videoBitsPerSecond: 2500000 };
-      }
 
-      const streamForRecording = getRecordingStream();
-
-      try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
-      catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
-
-      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = () => {
-         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-         isRecording = false;
-         finalizeRecording();
-      };
-      
-      mediaRecorder.start();
-      isRecording = true;
+      state.mediaRecorder.start();
+      state.isRecording = true;
       document.body.classList.add('recording');
-      
-      recordingStartTime = Date.now();
-      progressCircle.style.strokeDashoffset = circumference;
-      
+
+      state.recordingStartTime = Date.now();
+      DOM['record-progress-circle'].style.strokeDashoffset = circumference;
+
       const tick = () => {
-         if (!isRecording) return;
-         const p = Math.min((Date.now() - recordingStartTime) / MAX_DURATION, 1);
-         progressCircle.style.strokeDashoffset = circumference * (1 - p);
-         if (p < 1) progressInterval = requestAnimationFrame(tick);
-         else stopRecording();
+        if (!state.isRecording) return;
+        const progress = Math.min((Date.now() - state.recordingStartTime) / CONFIG.maxDuration, 1);
+        DOM['record-progress-circle'].style.strokeDashoffset = circumference * (1 - progress);
+        if (progress < 1) state.progressInterval = requestAnimationFrame(tick);
+        else stopRecording();
       };
-      progressInterval = requestAnimationFrame(tick);
+      state.progressInterval = requestAnimationFrame(tick);
     }
 
     function stopRecording() {
-       if (mediaRecorder && mediaRecorder.state === 'recording') {
-           mediaRecorder.stop();
-       } else if (isRecording) {
-           isRecording = false;
-           finalizeRecording();
-       }
+      if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+        state.mediaRecorder.stop();
+      } else if (state.isRecording) {
+        state.isRecording = false;
+        finalizeRecording();
+      }
     }
 
-    function finalizeRecording() {
-       if(progressInterval) cancelAnimationFrame(progressInterval);
-       document.body.classList.remove('recording');
-       progressCircle.style.strokeDashoffset = circumference;
-       if (torchEnabled) toggleFlash();
-       if (stopCanvasDrawing) { stopCanvasDrawing(); stopCanvasDrawing = null; }
-       if (recordingStream) { recordingStream.getTracks().forEach(t => t.stop()); recordingStream = null; }
-       shouldCheckDuration = false;
-       if (previewTimeout) clearTimeout(previewTimeout);
-       previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
+    async function finalizeRecording() {
+      if (state.canvasReadyPromise) {
+        try { await state.canvasReadyPromise; } catch (e) {}
+      }
+      if (state.progressInterval) cancelAnimationFrame(state.progressInterval);
+      document.body.classList.remove('recording');
+      DOM['record-progress-circle'].style.strokeDashoffset = circumference;
+      if (state.torchEnabled) toggleFlash();
+      clearCanvasStream();
+      state.shouldCheckDuration = false;
+      if (state.previewTimeout) clearTimeout(state.previewTimeout);
+      state.previewTimeout = setTimeout(() => { if (state.recordedBlob) showPreview(state.recordedBlob); }, 100);
     }
 
     function showPreview(blob) {
-       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
-       previewObjectURL = URL.createObjectURL(blob);
-       previewVideo.src = previewObjectURL;
-
-       previewVideo.style.transform = "scaleX(1)";
-       
-       previewOverlay.classList.add('active');
-       document.body.classList.add('showing-preview');
-       previewVideo.play().catch(()=>{});
+      if (state.previewObjectURL) URL.revokeObjectURL(state.previewObjectURL);
+      state.previewObjectURL = URL.createObjectURL(blob);
+      DOM['preview-video'].src = state.previewObjectURL;
+      DOM['preview-video'].style.transform = 'scaleX(1)';
+      DOM['preview-overlay'].classList.add('active');
+      document.body.classList.add('showing-preview');
+      DOM['preview-video'].play().catch(() => {});
     }
 
     function resetPreviewState() {
-       if (previewTimeout) {
-           clearTimeout(previewTimeout);
-           previewTimeout = null;
-       }
-       previewVideo.pause();
-       previewVideo.src = '';
-       if (previewObjectURL) {
-           URL.revokeObjectURL(previewObjectURL);
-           previewObjectURL = null;
-       }
-       recordedBlob = null;
+      if (state.previewTimeout) {
+        clearTimeout(state.previewTimeout);
+        state.previewTimeout = null;
+      }
+      DOM['preview-video'].pause();
+      DOM['preview-video'].src = '';
+      if (state.previewObjectURL) {
+        URL.revokeObjectURL(state.previewObjectURL);
+        state.previewObjectURL = null;
+      }
+      state.recordedBlob = null;
     }
 
     function hidePreview() {
-       previewOverlay.classList.remove('active');
-       document.body.classList.remove('showing-preview');
-       resetPreviewState();
-
-       if (!mediaStream || !mediaStream.active) {
-           startCamera();
-       }
+      DOM['preview-overlay'].classList.remove('active');
+      document.body.classList.remove('showing-preview');
+      resetPreviewState();
+      if (!state.mediaStream || !state.mediaStream.active) startCamera();
     }
 
-    previewVideo.onloadedmetadata = () => {
-        if (shouldCheckDuration) {
-            if (previewVideo.duration > 61) {
-                const sec = Math.round(previewVideo.duration);
-                showError(`Vidéo trop longue (${Math.floor(sec/60)}m${sec%60}s). Max 60s.`);
-                hidePreview();
-            }
-            shouldCheckDuration = false;
-        }
-    };
-
-    flashBtn.onclick = toggleFlash;
-    
-    switchBtn.onclick = () => {
-       if (isRecording || isCountingDown || isSwitching) return;
-       isSwitching = true;
-       
-       switchBtn.style.transform = "rotate(180deg)";
-       if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
-       
-       facingMode = (facingMode === 'environment') ? 'user' : 'environment';
-       
-       startCamera().then(() => {
-          setTimeout(() => switchBtn.style.transform = "rotate(0deg)", 300);
-          isSwitching = false;
-       }).catch(() => {
-          isSwitching = false;
-       });
-    };
-    
-    // --- Galerie: Nettoyer la preview, couper micro, ouvrir menu ---
-    galleryBtn.onclick = () => {
-        // 💥 STOP TOUTES LES ACTIONS EN COURS
-        if (previewTimeout) {
-            clearTimeout(previewTimeout);
-            previewTimeout = null;
-        }
-
-        // 💥 VIDE IMMÉDIATEMENT TOUTES LES VARS QUI PEUVENT RELANCER UNE PREVIEW
-        recordedBlob = null;
-        shouldCheckDuration = false;
-
-        // 💥 VIDE LES SOURCES VIDÉO AVANT hidePreview()
-        previewVideo.pause();
-        previewVideo.src = '';
-        if (previewObjectURL) {
-            URL.revokeObjectURL(previewObjectURL);
-            previewObjectURL = null;
-        }
-
-        // 💥 MAINTENANT on peut cacher la preview
-        hidePreview();
-
-        // 💥 On s’assure que le flux audio ne réutilise rien
-        if (mediaStream) {
-            mediaStream.getAudioTracks().forEach(track => track.stop());
-        }
-
-        // 💥 Reset du champ input
-        galleryInput.value = '';
-
-        // Ouvre la galerie
-        galleryInput.click();
-    };
-    
-    function handleFileSelect(e) {
-       const file = e.target.files[0];
-       if(!file) {
-           startCamera();
-           return;
-       }
-       recordedBlob = file;
-       shouldCheckDuration = true;
-       showPreview(file);
-       e.target.value = '';
+    function handleSwitch() {
+      if (state.isRecording || state.isCountingDown || state.isSwitching) return;
+      state.isSwitching = true;
+      DOM['switch-btn'].style.transform = 'rotate(180deg)';
+      stopMediaStream();
+      state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+      startCamera()
+        .then(() => setTimeout(() => DOM['switch-btn'].style.transform = 'rotate(0deg)', 300))
+        .finally(() => { state.isSwitching = false; });
     }
 
-    galleryInput.onchange = handleFileSelect;
-    
-    // --- CORRECTION CLÉ : Double nettoyage de la vidéo de prévisualisation ---
-    restartBtn.onclick = () => {
-        // Nettoyage explicite AVANT d'appeler hidePreview pour vider la source
-        resetPreviewState();
-        hidePreview();
-    };
-    // --- FIN CORRECTION CLÉ ---
-    
-    nextBtn.onclick = () => {
-       const url = getUploadURL();
-       uploadOverlay.classList.add('active');
-       uploadText.textContent = "0%";
-       if(!url || !recordedBlob) {
-          uploadText.textContent = "Erreur"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); return;
-       }
-       const xhr = new XMLHttpRequest();
-       xhr.open('PUT', url, true);
-       xhr.setRequestHeader('Content-Type', recordedBlob.type);
-       xhr.upload.onprogress = e => { if(e.lengthComputable) uploadText.textContent = Math.round((e.loaded/e.total)*100) + "%"; };
-       xhr.onload = () => {
-          if(xhr.status < 300) {
-             uploadText.textContent = "Succès";
-             const assetId = url.split('/').pop().split('?')[0];
-             notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
-          } else { uploadText.textContent = "Échec"; setTimeout(()=>uploadOverlay.classList.remove('active'), 2000); }
-       };
-       xhr.send(recordedBlob);
-    };
-    
-    previewOverlay.onclick = (e) => {
-      if(!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
-         previewVideo.paused ? previewVideo.play() : previewVideo.pause();
+    function handleGalleryClick() {
+      if (state.previewTimeout) {
+        clearTimeout(state.previewTimeout);
+        state.previewTimeout = null;
       }
-    };
+      state.recordedBlob = null;
+      state.shouldCheckDuration = false;
+      DOM['preview-video'].pause();
+      DOM['preview-video'].src = '';
+      if (state.previewObjectURL) {
+        URL.revokeObjectURL(state.previewObjectURL);
+        state.previewObjectURL = null;
+      }
+      hidePreview();
+      if (state.mediaStream) state.mediaStream.getAudioTracks().forEach(track => track.stop());
+      DOM['galleryInput'].value = '';
+      DOM['galleryInput'].click();
+    }
 
-    // --- TEMPORAIRE : message pour ReactNativeWebView ---
-    setTimeout(() => {
-      window.ReactNativeWebView?.postMessage("test-message");
-    }, 3000);
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) {
+        startCamera();
+        return;
+      }
+      state.recordedBlob = file;
+      state.shouldCheckDuration = true;
+      showPreview(file);
+      e.target.value = '';
+    }
 
+    function handleRestart() {
+      resetPreviewState();
+      hidePreview();
+    }
+
+    function handleUpload() {
+      const url = getUploadURL();
+      DOM['upload-overlay'].classList.add('active');
+      DOM['upload-text'].textContent = '0%';
+      if (!url || !state.recordedBlob) {
+        DOM['upload-text'].textContent = 'Erreur';
+        setTimeout(() => DOM['upload-overlay'].classList.remove('active'), 2000);
+        return;
+      }
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', url, true);
+      xhr.setRequestHeader('Content-Type', state.recordedBlob.type);
+      xhr.upload.onprogress = e => { if (e.lengthComputable) DOM['upload-text'].textContent = Math.round((e.loaded / e.total) * 100) + '%'; };
+      xhr.onload = () => {
+        if (xhr.status < 300) {
+          DOM['upload-text'].textContent = 'Succès';
+          const assetId = url.split('/').pop().split('?')[0];
+          notifyHost({ status: 'success', action: 'next_page', asset_id: assetId });
+        } else {
+          DOM['upload-text'].textContent = 'Échec';
+          setTimeout(() => DOM['upload-overlay'].classList.remove('active'), 2000);
+        }
+      };
+      xhr.send(state.recordedBlob);
+    }
+
+    function handlePreviewOverlayClick(e) {
+      if (!e.target.closest('.action-btn') && !e.target.closest('#preview-actions')) {
+        DOM['preview-video'].paused ? DOM['preview-video'].play() : DOM['preview-video'].pause();
+      }
+    }
+
+    function handleMetadataLoaded() {
+      if (state.shouldCheckDuration) {
+        if (DOM['preview-video'].duration > 61) {
+          const sec = Math.round(DOM['preview-video'].duration);
+          showError(`Vidéo trop longue (${Math.floor(sec / 60)}m${sec % 60}s). Max 60s.`);
+          hidePreview();
+        }
+        state.shouldCheckDuration = false;
+      }
+    }
+
+    function initEventListeners() {
+      DOM['timer-btn'].addEventListener('click', handleTimerClick);
+      DOM['flash-btn'].addEventListener('click', toggleFlash);
+      DOM['record-wrap-btn'].addEventListener('click', handleRecordToggle);
+      DOM['switch-btn'].addEventListener('click', handleSwitch);
+      DOM['gallery-btn'].addEventListener('click', handleGalleryClick);
+      DOM['galleryInput'].addEventListener('change', handleFileSelect);
+      DOM['restart-button'].addEventListener('click', handleRestart);
+      DOM['next-button'].addEventListener('click', handleUpload);
+      DOM['preview-overlay'].addEventListener('click', handlePreviewOverlayClick);
+      DOM['preview-video'].addEventListener('loadedmetadata', handleMetadataLoaded);
+    }
+
+    setTimeout(() => { window.ReactNativeWebView?.postMessage('test-message'); }, 3000);
+
+    initEventListeners();
     startCamera();
-
   </script>
+
 </body>
 </html>
