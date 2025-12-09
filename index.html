@@ -391,9 +391,15 @@
       if (controls) controls.style.opacity = value;
     }
 
-    function startCountdownAndRecord() {
+    async function startCountdownAndRecord() {
       if (state.isCountingDown) return;
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+
+      const ready = await ensureAudioReady();
+      if (!ready) {
+        showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
+        return;
+      }
 
       state.isCountingDown = true;
       let count = state.timerDuration;
@@ -554,7 +560,7 @@
       setTimeout(() => { state.isToggleLocked = false; }, 300);
     }
 
-    function handleRecordToggle(e) {
+    async function handleRecordToggle(e) {
       e.stopPropagation();
       if (state.isToggleLocked) return;
       lockToggleTemporarily();
@@ -563,7 +569,7 @@
       if (state.isRecording) {
         stopRecording();
       } else if (state.timerDuration > 0) {
-        startCountdownAndRecord();
+        await startCountdownAndRecord();
       } else {
         startRecording();
       }
