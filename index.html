@@ -234,9 +234,6 @@
     let shouldCheckDuration = false;
     let isToggleLocked = false;
     let isSwitching = false;
-    let recordingStream = null;
-    let mirrorCanvas = null;
-    let mirrorAnimation = null;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
     const PATH_FLASH_OFF = "M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z";
@@ -468,23 +465,21 @@
           showError("Impossible de démarrer l'enregistrement (Micro indisponible).");
           return;
       }
-
-      recordedFacingMode = facingMode;
+      
+      recordedFacingMode = facingMode; 
       recordedChunks = [];
-
-      const streamForRecording = getRecordingStream();
-
+      
       let options = {
          mimeType: 'video/mp4',
-         videoBitsPerSecond: 2500000
+         videoBitsPerSecond: 2500000 
       };
-
+      
       if (!MediaRecorder.isTypeSupported('video/mp4')) {
           options = { videoBitsPerSecond: 2500000 };
       }
 
-      try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
-      catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
+      try { mediaRecorder = new MediaRecorder(mediaStream, options); }
+      catch(e) { mediaRecorder = new MediaRecorder(mediaStream); }
 
       mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = () => {
@@ -524,68 +519,21 @@
        document.body.classList.remove('recording');
        progressCircle.style.strokeDashoffset = circumference;
        if (torchEnabled) toggleFlash();
-       if (mirrorAnimation) { cancelAnimationFrame(mirrorAnimation); mirrorAnimation = null; }
-       if (recordingStream && recordingStream !== mediaStream) {
-           recordingStream.getTracks().forEach(t => t.stop());
-           recordingStream = null;
-       }
        shouldCheckDuration = false;
        if (previewTimeout) clearTimeout(previewTimeout);
        previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
-    }
-
-    function getRecordingStream() {
-      if (!mediaStream) return null;
-
-      if (facingMode !== 'user') {
-          recordingStream = mediaStream;
-          return recordingStream;
-      }
-
-      const videoTrack = mediaStream.getVideoTracks()[0];
-      const settings = videoTrack?.getSettings ? videoTrack.getSettings() : {};
-      const width = settings.width || 1920;
-      const height = settings.height || 1080;
-
-      mirrorCanvas = document.createElement('canvas');
-      mirrorCanvas.width = width;
-      mirrorCanvas.height = height;
-      const ctx = mirrorCanvas.getContext('2d');
-      const videoEl = cameraPreview;
-
-      const draw = () => {
-          if (!ctx || !mirrorCanvas) return;
-          ctx.save();
-          ctx.scale(-1, 1);
-          ctx.translate(-mirrorCanvas.width, 0);
-          ctx.drawImage(videoEl, 0, 0, mirrorCanvas.width, mirrorCanvas.height);
-          ctx.restore();
-          mirrorAnimation = requestAnimationFrame(draw);
-      };
-
-      mirrorAnimation = requestAnimationFrame(draw);
-
-      const mirroredStream = mirrorCanvas.captureStream();
-      mediaStream.getAudioTracks().forEach(track => mirroredStream.addTrack(track));
-      recordingStream = mirroredStream;
-      return recordingStream;
     }
 
     function showPreview(blob) {
        if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
        previewObjectURL = URL.createObjectURL(blob);
        previewVideo.src = previewObjectURL;
-
+       
        if (shouldCheckDuration) {
             previewVideo.style.transform = "scaleX(1)";
        } else {
-            if (recordedFacingMode === 'user') {
-                // Selfie: l'enregistrement a déjà été dé-miroité via le canvas, on laisse donc l'affichage non-miroir.
-                previewVideo.style.transform = "scaleX(1)";
-            } else {
-                // Caméra arrière → pas miroir
-                previewVideo.style.transform = "scaleX(1)";
-            }
+            if (recordedFacingMode === 'user') previewVideo.style.transform = "scaleX(-1)";
+            else previewVideo.style.transform = "scaleX(1)";
        }
        
        previewOverlay.classList.add('active');
