@@ -214,8 +214,9 @@
     const errorToast = document.getElementById('error-toast');
     const recordingCanvas = document.getElementById('recording-canvas');
 
-    cameraPreview.onplaying = () => {
-      cameraPreview.style.opacity = "1";
+    cameraPreview.onloadedmetadata = () => {
+      cameraPreview.style.objectFit = "cover";
+      cameraPreview.style.opacity = "1"; // garantir affichage plein écran
     };
 
     let mediaStream = null;
