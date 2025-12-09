@@ -238,7 +238,6 @@
     let isToggleLocked = false;
     let isSwitching = false;
     let recordingStream = null;
-    let internalRecordingCanvas = null;
     let stopCanvasDrawing = null;
 
     const PATH_FLASH_ON = "M7 2v11h3v9l7-12h-4l4-8z";
@@ -422,7 +421,7 @@
     }
 
     function getRecordingStream() {
-      if (!mediaStream) return mediaStream;
+      if (!recordingCanvas) return mediaStream;
 
       if (recordingStream) {
         recordingStream.getTracks().forEach(t => t.stop());
@@ -432,27 +431,31 @@
         stopCanvasDrawing = null;
       }
 
-      const trackSettings = mediaStream.getVideoTracks()?.[0]?.getSettings?.() || {};
-      const width = cameraPreview.videoWidth || trackSettings.width || cameraPreview.clientWidth || 0;
-      const height = cameraPreview.videoHeight || trackSettings.height || cameraPreview.clientHeight || 0;
-      if (!width || !height) {
-        requestAnimationFrame(() => getRecordingStream());
-        return;
-      }
-      const scaleX = facingMode === 'user' ? -1 : 1;
-      const drawX = scaleX === -1 ? -width : 0;
-
-      internalRecordingCanvas = document.createElement('canvas');
-      internalRecordingCanvas.width = width;
-      internalRecordingCanvas.height = height;
-      const ctx = internalRecordingCanvas.getContext('2d');
+      const ctx = recordingCanvas.getContext('2d');
+      const updateCanvasSize = () => {
+        if (cameraPreview.videoWidth && cameraPreview.videoHeight) {
+          if (recordingCanvas.width !== cameraPreview.videoWidth || recordingCanvas.height !== cameraPreview.videoHeight) {
+            recordingCanvas.width = cameraPreview.videoWidth;
+            recordingCanvas.height = cameraPreview.videoHeight;
+          }
+        }
+      };
 
       let drawing = true;
       const drawFrame = () => {
         if (!drawing) return;
+        updateCanvasSize();
+        if (!recordingCanvas.width || !recordingCanvas.height) {
+          requestAnimationFrame(drawFrame);
+          return;
+        }
         ctx.save();
-        ctx.scale(scaleX, 1);
-        ctx.drawImage(cameraPreview, drawX, 0, width, height);
+        ctx.clearRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+        if (facingMode === 'user') {
+          ctx.translate(recordingCanvas.width, 0);
+          ctx.scale(-1, 1);
+        }
+        ctx.drawImage(cameraPreview, 0, 0, recordingCanvas.width, recordingCanvas.height);
         ctx.restore();
         requestAnimationFrame(drawFrame);
       };
@@ -461,7 +464,7 @@
 
       stopCanvasDrawing = () => { drawing = false; };
 
-      recordingStream = internalRecordingCanvas.captureStream(30);
+      recordingStream = recordingCanvas.captureStream(30);
       if (mediaStream) {
         mediaStream.getAudioTracks().forEach(track => recordingStream.addTrack(track));
       }
@@ -522,32 +525,26 @@
       recordedFacingMode = facingMode; 
       recordedChunks = [];
       
-        let options = {
-           mimeType: 'video/mp4',
-           videoBitsPerSecond: 2500000
-        };
+      let options = {
+         mimeType: 'video/mp4',
+         videoBitsPerSecond: 2500000 
+      };
+      
+      if (!MediaRecorder.isTypeSupported('video/mp4')) {
+          options = { videoBitsPerSecond: 2500000 };
+      }
 
-        if (!MediaRecorder.isTypeSupported('video/mp4')) {
-            options = { videoBitsPerSecond: 2500000 };
-        }
+      const streamForRecording = getRecordingStream();
 
-        const streamForRecording = getRecordingStream();
+      try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
+      catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
 
-        try { mediaRecorder = new MediaRecorder(streamForRecording, options); }
-        catch(e) { mediaRecorder = new MediaRecorder(streamForRecording); }
-
-        const activeRecorder = mediaRecorder;
-        const activeMimeType = activeRecorder.mimeType || options.mimeType || 'video/webm';
-
-        activeRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
-        activeRecorder.onstop = () => {
-           setTimeout(() => {
-             recordedBlob = new Blob(recordedChunks, { type: activeMimeType });
-             isRecording = false;
-             mediaRecorder = null;
-             finalizeRecording();
-           }, 0);
-        };
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = () => {
+         recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+         isRecording = false;
+         finalizeRecording();
+      };
       
       mediaRecorder.start();
       isRecording = true;
@@ -566,20 +563,14 @@
       progressInterval = requestAnimationFrame(tick);
     }
 
-      function stopRecording() {
-         const recorder = mediaRecorder;
-         if (!recorder) return;
-
-         requestAnimationFrame(() => {
-             if (recorder.state === "recording") recorder.stop();
-         });
-
-         if (recorder.state !== 'recording' && isRecording) {
-             isRecording = false;
-             mediaRecorder = null;
-             finalizeRecording();
-         }
-      }
+    function stopRecording() {
+       if (mediaRecorder && mediaRecorder.state === 'recording') {
+           mediaRecorder.stop();
+       } else if (isRecording) {
+           isRecording = false;
+           finalizeRecording();
+       }
+    }
 
     function finalizeRecording() {
        if(progressInterval) cancelAnimationFrame(progressInterval);
@@ -588,7 +579,6 @@
        if (torchEnabled) toggleFlash();
        if (stopCanvasDrawing) { stopCanvasDrawing(); stopCanvasDrawing = null; }
        if (recordingStream) { recordingStream.getTracks().forEach(t => t.stop()); recordingStream = null; }
-       internalRecordingCanvas = null;
        shouldCheckDuration = false;
        if (previewTimeout) clearTimeout(previewTimeout);
        previewTimeout = setTimeout(() => { if(recordedBlob) showPreview(recordedBlob); }, 100);
@@ -599,7 +589,7 @@
        previewObjectURL = URL.createObjectURL(blob);
        previewVideo.src = previewObjectURL;
 
-       previewVideo.style.transform = recordedFacingMode === 'user' ? "scaleX(-1)" : "scaleX(1)";
+       previewVideo.style.transform = "scaleX(1)";
        
        previewOverlay.classList.add('active');
        document.body.classList.add('showing-preview');
